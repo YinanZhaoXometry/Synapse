@@ -1,11 +1,12 @@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ArrowDownIcon, BulbIcon, DownloadIcon } from "./landing-icons";
+import { LANDING_RELEASES_URL } from "./LandingHeader";
 
 /**
  * Hero — copy left, the knowledge-map board right (ported verbatim from the
  * design: window chrome, the memory-topic SVG map, the "next step" row).
  */
-export function LandingHero({ onOpenDownload }: { onOpenDownload: (event: React.MouseEvent) => void }) {
+export function LandingHero() {
   const { t } = useLanguage();
   return (
     <section className="lp-hero" id="lp-top" aria-labelledby="lp-hero-title">
@@ -19,10 +20,10 @@ export function LandingHero({ onOpenDownload }: { onOpenDownload: (event: React.
           </h1>
           <p className="lp-hero-lead">{t("landing.hero.lead")}</p>
           <div className="lp-hero-actions">
-            <button className="lp-btn lp-btn-primary" type="button" onClick={onOpenDownload}>
+            <a className="lp-btn lp-btn-primary" href={LANDING_RELEASES_URL} target="_blank" rel="noreferrer">
               <DownloadIcon />
               {t("landing.hero.download")}
-            </button>
+            </a>
             <a className="lp-btn lp-btn-secondary" href="#lp-preview">
               {t("landing.hero.seeHow")}
               <ArrowDownIcon />

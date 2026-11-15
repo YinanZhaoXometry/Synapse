@@ -1,17 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { BrandMark, CloseIcon, DownloadIcon, GithubIcon, MenuIcon } from "./landing-icons";
+import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
+import { LANGUAGES, useLanguage, type Language } from "@/contexts/LanguageContext";
+import { BrandMark, CheckIcon, CloseIcon, DownloadIcon, GithubIcon, GlobeIcon, MenuIcon } from "./landing-icons";
 
 /** The repository (owner ask 2026-11-15): linked from the header pill, the
- * mobile menu, and the footer nav. */
+ * mobile menu, and the footer nav. The download CTAs point at the releases
+ * page (owner round 2026-11-15) — GitHub hosts the installers. */
 export const LANDING_REPO_URL = "https://github.com/YinanZhaoXometry/Synapse";
+export const LANDING_RELEASES_URL = "https://github.com/YinanZhaoXometry/Synapse/releases";
 
 // The five in-page anchors the header nav + scrollspy share (landing sections).
 
 export const LANDING_SECTIONS = ["lp-workflow", "lp-features", "lp-preview", "lp-scenarios", "lp-faq"] as const;
 
-export function LandingHeader({ onOpenDownload }: { onOpenDownload: (event: React.MouseEvent) => void }) {
+// Language endonyms: a language's own name reads the same in every UI locale,
+// so these deliberately ride outside the i18n deck.
+const LANGUAGE_LABELS: Record<Language, string> = {
+  zh: "简体中文",
+  en: "English",
+  "zh-TW": "繁體中文",
+};
+
+export function LandingHeader() {
   const { t, language, setLanguage } = useLanguage();
   const [menuOpen, setMenuOpen] = useState(false);
   const [currentSection, setCurrentSection] = useState("");
@@ -105,18 +116,30 @@ export function LandingHeader({ onOpenDownload }: { onOpenDownload: (event: Reac
           {navItems.map(navLink)}
         </nav>
         <div className="lp-header-actions">
-          {/* Language toggle (round 3): shows the language you'd switch TO,
-              persisting through the app's own synapse-lang seam. */}
-          <button
-            className="lp-lang-toggle"
-            type="button"
-            aria-label={t("common.switchLang")}
-            onClick={() => setLanguage(language === "zh" ? "en" : "zh")}
-          >
-            {language === "zh" ? "EN" : "中文"}
-          </button>
+          {/* Language menu (round 5): a ghost globe trigger opening the three
+              locales, persisting through the app's own synapse-lang seam. Radix
+              primitives render inline — no portal — so the .lp-root token scope
+              (fixed dark palette) applies to the menu panel. */}
+          <DropdownMenuPrimitive.Root>
+            <DropdownMenuPrimitive.Trigger className="lp-ghost-btn" aria-label={t("common.switchLang")}>
+              <GlobeIcon />
+            </DropdownMenuPrimitive.Trigger>
+            <DropdownMenuPrimitive.Content className="lp-lang-menu" sideOffset={8} align="end">
+              {LANGUAGES.map((lang) => (
+                <DropdownMenuPrimitive.Item
+                  key={lang}
+                  className="lp-lang-item"
+                  data-active={language === lang || undefined}
+                  onSelect={() => setLanguage(lang)}
+                >
+                  <span className="lp-lang-name">{LANGUAGE_LABELS[lang]}</span>
+                  {language === lang && <CheckIcon />}
+                </DropdownMenuPrimitive.Item>
+              ))}
+            </DropdownMenuPrimitive.Content>
+          </DropdownMenuPrimitive.Root>
           <a
-            className="lp-github-link"
+            className="lp-ghost-btn"
             href={LANDING_REPO_URL}
             target="_blank"
             rel="noreferrer"
@@ -127,10 +150,10 @@ export function LandingHeader({ onOpenDownload }: { onOpenDownload: (event: Reac
           <Link className="lp-login-link" to="/login">
             {t("landing.header.login")}
           </Link>
-          <button className="lp-btn lp-btn-primary lp-btn-sm" type="button" onClick={(event) => onOpenDownload(event)}>
+          <a className="lp-btn lp-btn-primary lp-btn-sm" href={LANDING_RELEASES_URL} target="_blank" rel="noreferrer">
             <DownloadIcon />
             {t("landing.header.download")}
-          </button>
+          </a>
           <button
             className="lp-menu-toggle"
             type="button"

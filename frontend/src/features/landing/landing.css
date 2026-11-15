@@ -43,7 +43,9 @@ html.lp-active {
   --lp-warn: #f6ad55;
   --lp-danger: #ff7070;
   --lp-text-subtle: #9a9ba1;
-  --lp-accent-ink: #ff9696;
+  /* owner round 2026-11-15: accent text goes full saturation (was the pastel
+     #ff9696) — same value as --lp-accent */
+  --lp-accent-ink: #ff6363;
   --lp-accent-deep: #ffb0b0;
   --lp-on-warm: #170d0f;
   --lp-peach: #ff6363;
@@ -72,8 +74,9 @@ html.lp-active {
   --lp-text-base: 15px;
   --lp-text-lg: 18px;
   --lp-text-xl: 22px;
-  --lp-text-hero: clamp(2.75rem, 6vw, 4.5rem);
-  --lp-text-section: clamp(2rem, 4vw, 3rem);
+  /* round 5: display sizes trimmed one step — the old maxima read oversized */
+  --lp-text-hero: clamp(2.5rem, 5vw, 3.75rem);
+  --lp-text-section: clamp(1.875rem, 3.25vw, 2.5rem);
   --lp-leading-body: 1.6;
   --lp-leading-display: 1.12;
   --lp-tracking-display: -0.05em;
@@ -108,8 +111,6 @@ html.lp-active {
   --lp-shadow-hero: 0 48px 120px rgba(0, 0, 0, 0.56);
   --lp-shadow-stage: 0 32px 96px rgba(0, 0, 0, 0.42);
   --lp-shadow-tab: 0 4px 16px rgba(0, 0, 0, 0.24);
-  --lp-shadow-dialog: 0 32px 100px rgba(0, 0, 0, 0.64);
-  --lp-backdrop: rgba(0, 0, 0, 0.72);
   --lp-gradient-sunset: linear-gradient(135deg, var(--lp-peach) 0%, var(--lp-coral) 100%);
   --lp-gradient-download: linear-gradient(135deg, #17181b 0%, #0c0d0f 100%);
   --lp-body-gradient: radial-gradient(ellipse 70% 36% at 50% 0%, rgba(255, 99, 99, 0.1), transparent 72%);
@@ -219,7 +220,7 @@ html.lp-active {
 .lp-eyebrow {
   display: flex;
   align-items: center;
-  gap: var(--lp-space-3);
+  gap: var(--lp-space-2);
   color: var(--lp-accent-ink);
   font-family: var(--lp-font-mono);
   font-size: var(--lp-text-xs);
@@ -228,10 +229,14 @@ html.lp-active {
   line-height: 1.4;
   text-transform: uppercase;
 }
+/* round 5: the numeric prefixes are gone, so the old 20×1px dash became a
+ * small round marker — a deliberate lead-in that works centered (hero,
+ * download) and left-aligned (sections) alike */
 .lp-eyebrow::before {
   content: "";
-  width: 20px;
-  height: 1px;
+  width: 4px;
+  height: 4px;
+  border-radius: var(--lp-radius-pill);
   background: currentColor;
 }
 .lp-section-title {
@@ -376,47 +381,75 @@ html.lp-active {
   background: rgba(255, 255, 255, 0.06);
   color: var(--lp-fg);
 }
-/* the language toggle (round 3): a small bordered pill showing the language
- * you'd switch to; shares the nav hover idiom */
-.lp-lang-toggle {
+/* header ghost icon buttons (round 5): the language globe + the GitHub repo
+ * link melt into the glass — no border, no fill (owner ask); the shared nav
+ * hover idiom reveals them */
+.lp-ghost-btn {
   display: inline-flex;
-  min-height: 40px;
-  align-items: center;
-  padding: 9px 12px;
-  border: 1px solid var(--lp-border-soft);
-  border-radius: var(--lp-radius-sm);
-  background: rgba(255, 255, 255, 0.045);
-  color: var(--lp-fg-2);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition: background-color var(--lp-motion-fast) var(--lp-ease-standard), color var(--lp-motion-fast) var(--lp-ease-standard),
-    border-color var(--lp-motion-fast) var(--lp-ease-standard);
-}
-/* GitHub repo pill (owner ask 2026-11-15): the lang toggle's chrome with an
- * icon-only square hit area. */
-.lp-github-link {
-  display: inline-flex;
+  width: 40px;
   min-height: 40px;
   align-items: center;
   justify-content: center;
-  padding: 9px 11px;
-  border: 1px solid var(--lp-border-soft);
+  border: none;
   border-radius: var(--lp-radius-sm);
-  background: rgba(255, 255, 255, 0.045);
+  background: transparent;
   color: var(--lp-fg-2);
-  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  cursor: pointer;
+  transition: background-color var(--lp-motion-fast) var(--lp-ease-standard), color var(--lp-motion-fast) var(--lp-ease-standard);
 }
-.lp-github-link:hover {
-  border-color: var(--lp-border);
-  background: rgba(255, 255, 255, 0.075);
+.lp-ghost-btn .lp-icon {
+  --lp-icon-size: 20px;
+}
+.lp-ghost-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
   color: var(--lp-fg);
 }
-.lp-lang-toggle:hover {
-  border-color: var(--lp-border);
-  background: rgba(255, 255, 255, 0.075);
+/* the language menu panel (round 5): the mobile-nav glass idiom sized for a
+ * menu. Radix mounts it inline — no portal — so these lp- tokens resolve. */
+.lp-lang-menu {
+  z-index: 51;
+  min-width: 168px;
+  padding: var(--lp-space-2);
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-lg);
+  background: var(--lp-glass-heavy);
+  box-shadow: var(--lp-elev-raised);
+  backdrop-filter: blur(28px);
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin, top right);
+  animation: lp-menu-in 140ms var(--lp-ease-standard);
+}
+.lp-lang-item {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--lp-space-3);
+  padding: 8px 12px;
+  border-radius: var(--lp-radius-sm);
+  color: var(--lp-fg-2);
+  font-size: var(--lp-text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: background-color var(--lp-motion-fast) var(--lp-ease-standard), color var(--lp-motion-fast) var(--lp-ease-standard);
+}
+.lp-lang-item[data-highlighted] {
+  background: rgba(255, 255, 255, 0.06);
   color: var(--lp-fg);
+}
+.lp-lang-item .lp-icon {
+  --lp-icon-size: 15px;
+  color: var(--lp-accent);
+}
+@keyframes lp-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* the fixed floating glass pill: the full-width header is click-transparent,
@@ -585,7 +618,7 @@ html.lp-active {
   margin-top: var(--lp-space-8);
 }
 .lp-hero-note {
-  margin-top: var(--lp-space-3);
+  margin-top: var(--lp-space-5);
   color: var(--lp-text-subtle);
   font-size: var(--lp-text-sm);
 }
@@ -799,7 +832,7 @@ html.lp-active {
 .lp-statement-quote {
   max-width: 700px;
   font-family: var(--lp-font-display);
-  font-size: clamp(1.5rem, 2.8vw, 2.25rem);
+  font-size: clamp(1.4rem, 2.5vw, 2rem);
   font-weight: 500;
   line-height: 1.45;
   letter-spacing: -0.035em;
@@ -1429,7 +1462,6 @@ html.lp-active {
 }
 .lp-download-content .lp-eyebrow {
   justify-content: center;
-  color: var(--lp-accent-ink);
 }
 .lp-download-content h2 {
   margin-top: var(--lp-space-4);
@@ -1459,7 +1491,7 @@ html.lp-active {
   color: var(--lp-fg);
 }
 .lp-download-note {
-  margin-top: var(--lp-space-4);
+  margin-top: var(--lp-space-5);
   color: var(--lp-text-subtle);
   font-size: var(--lp-text-sm);
 }
@@ -1583,165 +1615,6 @@ html.lp-active {
 }
 .lp-footer-nav a:hover {
   color: var(--lp-accent-ink);
-}
-
-.lp-dialog {
-  width: min(560px, calc(100% - 32px));
-  max-height: calc(100dvh - 32px);
-  margin: auto;
-  padding: 0;
-  overflow: auto;
-  border: 1px solid var(--lp-border);
-  border-radius: 20px;
-  background: var(--lp-surface);
-  color: var(--lp-fg);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), var(--lp-shadow-dialog);
-}
-.lp-dialog::backdrop {
-  background: var(--lp-backdrop);
-  backdrop-filter: blur(8px);
-}
-.lp-dialog[open] {
-  animation: lp-dialog-in 180ms var(--lp-ease-standard);
-}
-.lp-dialog.is-closing {
-  animation: lp-dialog-out 120ms ease-in;
-}
-.lp-dialog-inner {
-  padding: 28px;
-}
-.lp-dialog-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--lp-space-4);
-}
-.lp-dialog-header h2 {
-  font-family: var(--lp-font-display);
-  font-size: 28px;
-  font-weight: 600;
-  letter-spacing: -0.035em;
-  line-height: 1.3;
-}
-.lp-dialog-close {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  flex: none;
-  place-items: center;
-  border: 1px solid var(--lp-border-soft);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--lp-fg-2);
-  cursor: pointer;
-}
-.lp-dialog-close:hover {
-  background: var(--lp-accent-soft);
-  color: var(--lp-accent-ink);
-}
-.lp-dialog-close .lp-icon {
-  --lp-icon-size: 20px;
-}
-.lp-dialog-copy {
-  margin-top: var(--lp-space-3);
-  color: var(--lp-fg-2);
-  font-size: 14px;
-  line-height: 1.75;
-}
-.lp-platform-list {
-  display: grid;
-  gap: var(--lp-space-3);
-  margin-top: var(--lp-space-6);
-}
-.lp-platform-option {
-  position: relative;
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
-  gap: var(--lp-space-3);
-  align-items: center;
-  min-height: 72px;
-  padding: 14px 16px;
-  border: 1px solid var(--lp-border);
-  border-radius: var(--lp-radius-md);
-  background: rgba(255, 255, 255, 0.018);
-  cursor: pointer;
-  transition: border-color var(--lp-motion-fast) var(--lp-ease-standard), background-color var(--lp-motion-fast) var(--lp-ease-standard),
-    box-shadow var(--lp-motion-fast) var(--lp-ease-standard);
-}
-.lp-platform-option:hover {
-  border-color: rgba(255, 255, 255, 0.22);
-}
-.lp-platform-option:has(input:checked) {
-  border-color: var(--lp-accent);
-  background: var(--lp-accent-soft);
-  box-shadow: 0 0 0 1px rgba(255, 99, 99, 0.2);
-}
-.lp-platform-option:has(input:focus-visible) {
-  box-shadow: var(--lp-focus-ring);
-}
-.lp-platform-option input {
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  accent-color: var(--lp-accent);
-}
-.lp-platform-option > .lp-icon {
-  --lp-icon-size: 22px;
-  color: var(--lp-accent-ink);
-}
-.lp-platform-name {
-  display: block;
-  font-size: var(--lp-text-base);
-  font-weight: 600;
-}
-.lp-platform-meta {
-  display: block;
-  margin-top: 2px;
-  color: var(--lp-text-subtle);
-  font-size: var(--lp-text-xs);
-}
-.lp-dialog-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--lp-space-3);
-  margin-top: var(--lp-space-6);
-}
-.lp-dialog-status {
-  margin-top: var(--lp-space-4);
-  padding: var(--lp-space-3) var(--lp-space-4);
-  border: 1px solid rgba(85, 200, 136, 0.18);
-  border-radius: var(--lp-radius-sm);
-  background: var(--lp-success-soft);
-  color: var(--lp-success-ink);
-  font-size: 14px;
-  line-height: 1.65;
-}
-.lp-dialog-footnote {
-  margin-top: var(--lp-space-4);
-  color: var(--lp-text-subtle);
-  font-size: var(--lp-text-xs);
-  line-height: 1.65;
-}
-
-@keyframes lp-dialog-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-@keyframes lp-dialog-out {
-  from {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(8px);
-  }
 }
 
 @media (hover: hover) {
@@ -2117,22 +1990,6 @@ html.lp-active {
   }
   .lp-footer-nav {
     gap: var(--lp-space-4);
-  }
-  .lp-dialog-inner {
-    padding: var(--lp-space-5);
-  }
-  .lp-dialog-header h2 {
-    font-size: 25px;
-  }
-  .lp-dialog-actions {
-    flex-direction: column;
-  }
-  .lp-dialog-actions .lp-btn {
-    width: 100%;
-  }
-  .lp-platform-option {
-    grid-template-columns: auto auto minmax(0, 1fr);
-    padding-inline: var(--lp-space-3);
   }
 }
 
