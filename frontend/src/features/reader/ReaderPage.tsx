@@ -77,7 +77,7 @@ import {
 import type { ErrorLike } from "@apollo/client";
 import { sessionBlobs } from "@/lib/session-blobs";
 import { CompanionPanel, type AskPrefill } from "@/features/companion/CompanionPanel";
-import { CompanionOverlay, CompanionSheet } from "./companion-surfaces";
+import { CompanionFloat, CompanionOverlay, CompanionSheet } from "./companion-surfaces";
 import { cn } from "@/lib/utils";
 import type { Annotation, ReadingLocator } from "@/domain/entities";
 import { PARSE_REASON_MESSAGE_KEY } from "./parse";
@@ -263,6 +263,16 @@ export default function ReaderPage() {
     setChromeHidden(immersive);
     return () => setChromeHidden(false);
   }, [immersive, setChromeHidden]);
+  // The immersive Companion float (owner bug round 2026-11-15): pill ⇄ float
+  // card over the immersive reading. Leaving immersive resets to the pill —
+  // re-entering starts collapsed (the reading comes first); `floatStreaming`
+  // drives the pill's pulse while a reply streams behind the collapsed card.
+  const [floatExpanded, setFloatExpanded] = useState(false);
+  const [floatStreaming, setFloatStreaming] = useState(false);
+  const handleFloatStreaming = useCallback((streaming: boolean) => setFloatStreaming(streaming), []);
+  useEffect(() => {
+    if (!immersive) setFloatExpanded(false);
+  }, [immersive]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState<number | null>(null);
   const flowRef = useRef<PdfFlowHandle | null>(null);
@@ -324,13 +334,20 @@ export default function ReaderPage() {
         setAnnotationsPanelOpen(false);
         return;
       }
+      // The immersive float joins the chain ahead of the ladder surfaces —
+      // its card collapses to the pill first; the next Escape leaves
+      // immersive entirely.
+      if (immersive && floatExpanded) {
+        setFloatExpanded(false);
+        return;
+      }
       const floating = tier === "tablet" || tier === "mobile";
       if (floating && panelOpen) setPanelChoice(false);
       else if (immersive) setImmersive(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tier, panelOpen, immersive, selectionBar, annotationsPanelOpen, focusPanelOpen]);
+  }, [tier, panelOpen, immersive, floatExpanded, selectionBar, annotationsPanelOpen, focusPanelOpen]);
 
   // Stored progress (FR-10): the restore target when no anchor asks for one.
   // The flows mount only once this query has settled (gate below), so the
@@ -974,6 +991,57 @@ export default function ReaderPage() {
               askPrefill={askPrefill}
             />
           </CompanionSheet>
+        )}
+
+        {/* The immersive float (owner bug round 2026-11-15): the Companion
+            follows the reader into immersion — pill ⇄ floating glass card
+            (tablet/desktop) or pill ⇄ sheet (mobile), no docked column, no
+            scrim. Collapsing keeps the panel mounted (minimize, not abandon),
+            so a reply streams on behind the pill; the ladder surfaces above
+            own the non-immersive arrangement again on exit. */}
+        {immersive && tier !== "mobile" && (
+          <CompanionFloat
+            label={t("companion.title")}
+            expandLabel={t("reader.companionFloatOpenAria")}
+            collapseLabel={t("reader.companionFloatCollapseAria")}
+            streaming={floatStreaming}
+            expanded={floatExpanded}
+            onExpandedChange={setFloatExpanded}
+            variant="card"
+          >
+            <CompanionPanel
+              materialId={material.id}
+              material={material}
+              positionRef={currentPositionRef}
+              displayLocator={displayLocator}
+              onJumpToLocator={jumpToLocator}
+              selectionRef={pendingSelectionRef}
+              askPrefill={askPrefill}
+              onStreamingChange={handleFloatStreaming}
+            />
+          </CompanionFloat>
+        )}
+        {immersive && tier === "mobile" && (
+          <CompanionFloat
+            label={t("companion.title")}
+            expandLabel={t("reader.companionFloatOpenAria")}
+            collapseLabel={t("reader.companionCloseAria")}
+            streaming={floatStreaming}
+            expanded={floatExpanded}
+            onExpandedChange={setFloatExpanded}
+            variant="sheet"
+          >
+            <CompanionPanel
+              materialId={material.id}
+              material={material}
+              positionRef={currentPositionRef}
+              displayLocator={displayLocator}
+              onJumpToLocator={jumpToLocator}
+              selectionRef={pendingSelectionRef}
+              askPrefill={askPrefill}
+              onStreamingChange={handleFloatStreaming}
+            />
+          </CompanionFloat>
         )}
 
         {/* The selection shortcuts bar (FR-13): floats beside the live

@@ -266,6 +266,9 @@ export const translations = {
       // PPT（epic-13 T5 · owner Q6）：按文本提取的诚实限制说明
       'reader.pptxTextOnlyNote': 'PPT 按文本提取；图片内容不会出现在提取结果中',
       'reader.companionCloseAria': '关闭 Companion',
+      // 沉浸模式 Companion 浮窗（owner bug round 2026-11-15）：药丸⇄浮卡
+      'reader.companionFloatOpenAria': '展开 Companion 浮窗',
+      'reader.companionFloatCollapseAria': '收起 Companion 浮窗',
       'reader.selectionBarLabel': '选段操作',
       'reader.selectionAsk': '问 Companion',
       'reader.selectionQuickTest': '快测',
@@ -1349,6 +1352,9 @@ export const translations = {
       // PPT (epic-13 T5, owner Q6): the honest text-extraction limitation note
       'reader.pptxTextOnlyNote': "PPT is extracted as text; image content won't appear in the extraction",
       'reader.companionCloseAria': 'Close Companion',
+      // The immersive Companion float (owner bug round 2026-11-15): pill ⇄ card
+      'reader.companionFloatOpenAria': 'Show the Companion float',
+      'reader.companionFloatCollapseAria': 'Collapse the Companion float',
       'reader.selectionBarLabel': 'Selection actions',
       'reader.selectionAsk': 'Ask Companion',
       'reader.selectionQuickTest': 'Quick Test',
