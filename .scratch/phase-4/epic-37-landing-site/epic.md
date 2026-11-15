@@ -26,3 +26,13 @@ Design source: Open Design 定稿 `eaef09c6-bee2-4e25-84e3-c501d2853ff5`（index
 ## Tickets
 
 单票交付（frontend-only、零后端、零 GraphQL）：routing + landing feature + i18n + vitest/e2e。design source 为唯一规格，无独立 spec.md。
+
+## Feedback round #2 (2026-11-15 afternoon) — dark redesign
+
+Owner updated the same Open Design project (index.html 12:15 / styles.css 12:16): a full VISUAL overhaul with identical HTML/copy/interactions. Shipped as T02 (`p4-37/t02-landing-dark-redesign`):
+
+- **Dark product-tool look** — `#07080a` bg, near-black surfaces, white fg, translucent-white borders; Inter display (serif retired), mono micro-labels; inverted white primary buttons (coral icons); fixed floating glass header pill (`scroll-padding` 108→92px responsive); centered single-column hero with blurred coral glow; unshelled demo stage; dark gradient download panel with top bloom; graph-paper knowledge-map canvas; sticky capabilities intro.
+- **Scope = landing.css rewrite only** — zero component/i18n/test changes (the deck and markup are untouched by the design).
+- **Dead CSS skipped**: the deliverable's `.hero-app-*` / `.hero-space-*` / `.hero-focus` family has no markup in its own index.html — not ported (flagged to owner in the PR; if a board sidebar was intended, the markup needs to arrive first).
+- **Latent specificity bug fixed** (exposed by the redesign, present since round 1): the scoped element resets `.lp-root button/a { color: inherit }` (0,1,1) outranked every single-class component color — invisible white-on-white buttons in dark, subtle color drift in round 1. Resets now ride `:where(.lp-root)` (zero specificity), restoring the design's bare-element semantics.
+- Gates: tsc/eslint clean, vitest 137/137, build green, e2e 28 pass/5 deliberate skips, zero horizontal overflow at 320–1440, visual gate PASS (button text verified mechanically: #111214 on white).
