@@ -480,4 +480,35 @@ RSpec.describe "GET /api/stream (epic P2-5 ticket 04 — the ONE non-GraphQL sur
       expect(response.headers["Access-Control-Allow-Origin"]).to be_nil
     end
   end
+
+  # BYOK (epic 39 T2): a ticket minted with a provider override streams
+  # through the CALLER's endpoint (the override adapter), never the shared
+  # one — and the call does not consume the shared daily cap.
+  describe "a BYOK provider override rides the ticket (epic 39)" do
+    let(:override_client) { double("override client") }
+
+    before do
+      allow(Ai::Provider).to receive(:override_adapter).and_return(override_client)
+      allow(adapter).to receive(:stream) # the shared adapter must stay UNTOUCHED — stub so the negative assertion is spyable
+    end
+
+    it "streams companion tokens through the caller's endpoint without cap spend" do
+      allow(override_client).to receive(:stream).and_return(%w[自己的 模型].each)
+      ticket = ::Ai::CreateStreamTicketCommand.call(
+        current_user: user, op: "companion", language: "zh",
+        material_id: material.id, question: "讲了什么？",
+        position: { locator: { kind: "markdown", section_id: "sec-1" }, text: "view" },
+        provider_override: { baseUrl: "https://api.example.com/v1", model: "m", apiKey: "k" }
+      ).value![:ticket]
+
+      get "/api/stream", params: { ticket: ticket.token, op: "companion" }
+
+      aggregate_failures do
+        expect(response.body).to include("event: token")
+        expect(override_client).to have_received(:stream).once
+        expect(adapter).not_to have_received(:stream)
+        expect(user.ai_usage_counters.count).to eq(0)
+      end
+    end
+  end
 end

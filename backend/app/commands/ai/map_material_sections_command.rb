@@ -29,6 +29,7 @@ module Ai
     option :current_user
     option :material_id
     option :language
+    option :provider_override, optional: true
 
     def call
       return Failure(:VALIDATION_FAILED, { message: "language is invalid", field: :language }) unless Ai::LANGUAGES.include?(language.to_s)
@@ -44,7 +45,7 @@ module Ai
 
       context = Ai::ContextAssembler.mapping_scope(plan, material)
       messages = Ai::Prompts.mapping(language: language, context: context)
-      provider = Ai::Provider.complete(user: current_user, messages: messages)
+      provider = Ai::Provider.complete(user: current_user, override: provider_override, messages: messages)
       return provider if provider.failure?
 
       targets = normalize_targets(provider.value!, material, plan)

@@ -23,15 +23,20 @@ module Mutations
                required: true,
                description: "The proposed-node-title language: \"zh\" | \"en\" (AD-16 — one parameter, one policy)."
 
+      argument :provider, Types::Ai::ProviderOverrideInput,
+               required: false,
+               description: "BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the server's for THIS call (their key pays it; no shared daily cap)."
+
       field :mappings, [ Types::MaterialNodeMappingType ],
             null: false,
             description: "The material's mapping rows after the run, in the sections' document order."
 
-      def resolve(material_id:, language:)
+      def resolve(material_id:, language:, provider: nil)
         command_result(::Ai::MapMaterialSectionsCommand.call(
           current_user: current_user!,
           material_id: material_id,
-          language: language
+          language: language,
+          provider_override: provider&.to_h
         ))
       end
     end

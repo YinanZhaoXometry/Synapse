@@ -34,11 +34,15 @@ module Mutations
                required: false,
                description: "① only: the echoed proposeLessonOutline output (title + sourceSectionIds per chapter) — re-validated server-side (≤8 chapters, unique titles, every id resolving on the source)."
 
+      argument :provider, Types::Ai::ProviderOverrideInput,
+               required: false,
+               description: "BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the server's for THIS call (their key pays it; no shared daily cap)."
+
       field :material, Types::MaterialType,
             null: false,
             description: "The created (or replayed / already-existing) lesson — origin=generated, sections empty, generation.outline placeholders pending."
 
-      def resolve(client_uuid:, language:, plan_id: nil, node_id: nil, material_id: nil, outline: nil)
+      def resolve(client_uuid:, language:, plan_id: nil, node_id: nil, material_id: nil, outline: nil, provider: nil)
         command_result(::Ai::CreateLessonCommand.call(
           current_user: current_user!,
           client_uuid: client_uuid,
@@ -46,7 +50,8 @@ module Mutations
           plan_id: plan_id,
           node_id: node_id,
           material_id: material_id,
-          outline: outline&.map(&:to_h)
+          outline: outline&.map(&:to_h),
+          provider_override: provider&.to_h
         ))
       end
     end

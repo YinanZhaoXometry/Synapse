@@ -72,12 +72,17 @@ module Ai
       # rate_limited | timeout | unreachable | unparseable; the
       # GraphQL-facing codes never change). A retryable transport fault
       # (RETRYABLE_DETAILS) gets the one bounded retry before failing.
-      def complete(user:, messages:)
-        result = dispatch(user:) { |client| client.complete(messages) }
+      #
+      # `override` (epic 39 T2, BYOK): the raw ProviderOverrideInput hash —
+      # when present the call rides the CALLER's OpenAI-compatible endpoint
+      # (their key pays it: no shared cap, no configured? gate); invalid
+      # overrides refuse with VALIDATION_FAILED before any HTTP.
+      def complete(user:, messages:, override: nil)
+        result = dispatch(user:, override:) { |client| client.complete(messages) }
         return result unless retryable_failure?(result)
 
         sleep(RETRY_BACKOFF_SECONDS)
-        dispatch(user:) { |client| client.complete(messages) }
+        dispatch(user:, override:) { |client| client.complete(messages) }
       end
 
       # Token deltas as a lazy Enumerator wrapped in a Result: Success holds
@@ -86,32 +91,49 @@ module Ai
       # turns them into a `terminal` event. The cap consumes one call per
       # `.stream` invocation (a client restart mints a fresh ticket → a new
       # invocation → counted, AD-16). No bounded retry here — see
-      # RETRYABLE_DETAILS's comment.
-      def stream(user:, messages:)
-        dispatch(user:) { |client| client.stream(messages) }
+      # RETRYABLE_DETAILS's comment. `override` as in `.complete`.
+      def stream(user:, messages:, override: nil)
+        dispatch(user:, override:) { |client| client.stream(messages) }
       end
 
       private
 
-      def dispatch(user:)
-        unless configured?
-          return Failure(ApplicationErrors::Failure.new(
-            code: :INTERNAL, context: { message: "ai provider not configured (AI_API_KEY blank)" }
-          ))
-        end
+      def dispatch(user:, override: nil)
+        client =
+          if override
+            coerced = ProviderOverride.coerce(override)
+            return coerced if coerced.failure?
 
-        count = DailyCap.consume!(user)
-        if DailyCap.tripped?(count)
-          return Failure(ApplicationErrors::Failure.new(
-            code: :CAP_REACHED, context: { message: "daily ai call cap reached (#{count}/#{DailyCap.limit})" }
-          ))
-        end
+            override_adapter(coerced.value!)
+          else
+            unless configured?
+              return Failure(ApplicationErrors::Failure.new(
+                code: :INTERNAL, context: { message: "ai provider not configured (AI_API_KEY blank)" }
+              ))
+            end
 
-        Success(yield adapter)
+            count = DailyCap.consume!(user)
+            if DailyCap.tripped?(count)
+              return Failure(ApplicationErrors::Failure.new(
+                code: :CAP_REACHED, context: { message: "daily ai call cap reached (#{count}/#{DailyCap.limit})" }
+              ))
+            end
+
+            adapter
+          end
+
+        Success(yield client)
       rescue ProviderError => e
         Failure(ApplicationErrors::Failure.new(
           code: :INTERNAL, context: { message: "ai provider call failed: #{e.message}", detail: e.detail }
         ))
+      end
+
+      # The BYOK adapter (epic 39 T2): same stub-ability contract as
+      # `.adapter` — specs stub this, never the transport. AI_THINKING is a
+      # server-side knob and stays disabled for caller-owned endpoints.
+      def override_adapter(override)
+        GlmClient.new(**override.configuration, thinking_disabled: true)
       end
 
       def retryable_failure?(result)

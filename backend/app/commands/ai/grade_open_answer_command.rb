@@ -17,6 +17,7 @@ module Ai
     option :question_id
     option :answer
     option :language
+    option :provider_override, optional: true
 
     GradedAnswer = Struct.new(:outcome, :rationale, :citation, keyword_init: true)
     Citation = Struct.new(:locator, :quote, keyword_init: true)
@@ -45,7 +46,7 @@ module Ai
         source_text: section["text"].to_s,
         language: language
       )
-      provider = Ai::Provider.complete(user: current_user, messages: messages)
+      provider = Ai::Provider.complete(user: current_user, override: provider_override, messages: messages)
       return provider if provider.failure?
 
       grade = normalize_grade(provider.value!)

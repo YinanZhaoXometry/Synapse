@@ -11,6 +11,7 @@ import { ApolloClient, ApolloLink, HttpLink, InMemoryCache, from } from "@apollo
 import { CombinedGraphQLErrors } from "@apollo/client/errors";
 import { ErrorLink } from "@apollo/client/link/error";
 import { SetContextLink } from "@apollo/client/link/context";
+import { providerOverrideLink } from "./provider-override-link";
 import { getToken } from "./auth-token";
 import { teardownSession } from "./session";
 
@@ -54,10 +55,15 @@ export function createApolloClient(): ApolloClient {
   // wrong-password problem, and it must keep the inline authErrorKey surface.
   const errorLink = sessionGuardLink();
 
+  // The BYOK injection seam (epic 39 T2): the desktop shell's own model
+  // config rides the `provider` input of every AI-invoking mutation — one
+  // link, zero consumer knowledge.
+  const byokLink = providerOverrideLink();
+
   const httpLink = new HttpLink({ uri: apiUri() });
 
   return new ApolloClient({
-    link: from([errorLink, authLink, httpLink]),
+    link: from([errorLink, authLink, byokLink, httpLink]),
     cache: new InMemoryCache(),
     // Queries the user did not ask for must never mask a failure (the phase-1
     // "never silent" posture): errors surface through `error` immediately.

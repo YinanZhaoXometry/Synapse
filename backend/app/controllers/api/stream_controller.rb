@@ -52,14 +52,18 @@ module Api
 
       write_sse_headers
       payload = redeemed.payload
+      # BYOK (epic 39 T2): the ticket may carry a provider override minted
+      # through CreateStreamTicketCommand — the caller's own endpoint pays
+      # every streamed call below (no shared cap).
+      override = Ai::ProviderOverride.from_payload(payload["provider"]) if payload["provider"].is_a?(Hash)
       if redeemed.op == "proposal"
-        stream_proposal(user, payload)
+        stream_proposal(user, payload, override)
       elsif redeemed.op == "plan_companion"
-        stream_plan_companion(user, payload)
+        stream_plan_companion(user, payload, override)
       elsif redeemed.op == "lesson"
-        stream_lesson(user, payload)
+        stream_lesson(user, payload, override)
       else
-        stream_companion(user, payload)
+        stream_companion(user, payload, override)
       end
     rescue StandardError => e
       # Headers may or may not be out yet — try the terminal event, then
@@ -112,8 +116,8 @@ module Api
     # or the typed Failure value (INTERNAL for transport faults — the cap
     # trips BEFORE any enumerator exists, so CAP_REACHED arrives as a
     # Failure too).
-    def stream_to_tokens(user, messages, on_delta)
-      result = Ai::Provider.stream(user: user, messages: messages)
+    def stream_to_tokens(user, messages, on_delta, override = nil)
+      result = Ai::Provider.stream(user: user, messages: messages, override: override)
       if result.failure?
         # The failure paths are silent on the wire by contract (terminal
         # enum only) — the log is the only diagnosability (2026-11-10: two
@@ -131,7 +135,7 @@ module Api
       end
     end
 
-    def stream_companion(user, payload)
+    def stream_companion(user, payload, override = nil)
       material = user.materials.find_by(id: payload["material_id"])
       return terminal(code: "NOT_FOUND") unless material
 
@@ -154,7 +158,7 @@ module Api
         context: context
       )
       failure = catch(:client_gone) do
-        stream_to_tokens(user, messages, ->(delta) { sse("token", { "text" => delta }) })
+        stream_to_tokens(user, messages, ->(delta) { sse("token", { "text" => delta }) }, override)
       end
       return if failure == :client_gone
       return terminal(code: failure.code) if failure.is_a?(ApplicationErrors::Failure)
@@ -179,7 +183,7 @@ module Api
     # node wins the grounding (the teaching turn is about the node); the
     # mistake citation still rides when an entry came along — the two inputs
     # are orthogonal, and the citation is about the entry, not the ground.
-    def stream_plan_companion(user, payload)
+    def stream_plan_companion(user, payload, override = nil)
       plan = user.study_plans.find_by(id: payload["plan_id"])
       return terminal(code: "NOT_FOUND") unless plan
 
@@ -218,7 +222,7 @@ module Api
         teach_node: teach_node
       )
       failure = catch(:client_gone) do
-        stream_to_tokens(user, messages, ->(delta) { sse("token", { "text" => delta }) })
+        stream_to_tokens(user, messages, ->(delta) { sse("token", { "text" => delta }) }, override)
       end
       return if failure == :client_gone
       return terminal(code: failure.code) if failure.is_a?(ApplicationErrors::Failure)
@@ -242,7 +246,7 @@ module Api
     # and provider failures pause with pausedKind=provider, both carrying the
     # code on terminal; there is NO auto-resume — continuing is an explicit
     # new ticket, whose mint clears the pause banner server-side.
-    def stream_lesson(user, payload)
+    def stream_lesson(user, payload, override = nil)
       lesson = user.materials.find_by(id: payload["lesson_id"])
       return terminal(code: "NOT_FOUND") unless lesson && lesson.generated? && lesson.generation.is_a?(Hash)
 
@@ -266,7 +270,7 @@ module Api
       end
 
       if outline.empty?
-        outcome = generate_lesson_outline(user, lesson, language)
+        outcome = generate_lesson_outline(user, lesson, language, override)
         return outcome[1] if outcome[0] == :fail
 
         outline = outcome[1]
@@ -283,7 +287,7 @@ module Api
         outline.each_with_index do |chapter, index|
           next if chapter["status"] == "ready"
 
-          outcome = stream_lesson_section(user, lesson, outline, index, chapter, language)
+          outcome = stream_lesson_section(user, lesson, outline, index, chapter, language, override)
           break unless outcome.nil?
         end
         outcome
@@ -299,13 +303,13 @@ module Api
     # the sections array append and the outline status flip in ONE row
     # update, so the reader never sees a half section. Failures pause the
     # lesson (pausedKind) and surface as the terminal code.
-    def stream_lesson_section(user, lesson, outline, index, chapter, language)
+    def stream_lesson_section(user, lesson, outline, index, chapter, language, override = nil)
       sse("section_start", { "sectionId" => chapter["id"], "title" => chapter["title"] })
 
       context = lesson_section_context(user, chapter)
       messages = Ai::Prompts.lesson_section(language: language, context: context,
                                             lesson_title: lesson.title, chapter_title: chapter["title"])
-      result = Ai::Provider.stream(user: user, messages: messages)
+      result = Ai::Provider.stream(user: user, messages: messages, override: override)
       return pause_and_code(lesson, result.failure) if result.failure?
 
       text = +""
@@ -362,7 +366,7 @@ module Api
     # placeholders persisted before the first section streams. Returns
     # [:ok, outline] or [:fail, terminal_code] (the failure paths pause the
     # lesson first).
-    def generate_lesson_outline(user, lesson, language)
+    def generate_lesson_outline(user, lesson, language, override = nil)
       generation = lesson.generation
       messages =
         if generation["variant"] == Ai::Lessons::VARIANT_NODE
@@ -388,7 +392,7 @@ module Api
                                      material_title: source.title)
         end
 
-      result = Ai::Provider.complete(user: user, messages: messages)
+      result = Ai::Provider.complete(user: user, messages: messages, override: override)
       return [ :fail, pause_and_code(lesson, result.failure) ] if result.failure?
 
       chapters =
@@ -432,7 +436,7 @@ module Api
       failure.code.to_s
     end
 
-    def stream_proposal(user, payload)
+    def stream_proposal(user, payload, override = nil)
       language = payload["language"]
       sse("rung", {
         "intent" => "reference",
@@ -446,7 +450,7 @@ module Api
       failure = catch(:client_gone) do
         stream_to_tokens(user, messages, ->(delta) {
           splitter.feed(delta).each { |token| sse("token", { "text" => token }) }
-        })
+        }, override)
       end
       return if failure == :client_gone
       return terminal(code: failure.code) if failure.is_a?(ApplicationErrors::Failure)

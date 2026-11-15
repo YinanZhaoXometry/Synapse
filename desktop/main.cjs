@@ -99,11 +99,21 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
     height: 850,
-    minWidth: 960,
+    // 1040 keeps the lg sidebar (264px) always visible: the md icon rail is
+    // only 64px wide — too narrow for the macOS traffic lights to overlay.
+    minWidth: 1040,
     minHeight: 640,
     title: "Synapse",
     show: false,
     autoHideMenuBar: process.platform !== "darwin",
+    // macOS (epic 39 T1): the industry look (VS Code/Notion) — no native
+    // title bar; the traffic lights overlay the app's own sidebar brand row
+    // and the sidebar is the drag region (AppLayout's desktop-drag-region
+    // CSS). Windows keeps its native frame (Window Controls Overlay is a
+    // future option, not a v1 need).
+    ...(process.platform === "darwin"
+      ? { titleBarStyle: "hidden", trafficLightPosition: { x: 14, y: 16 } }
+      : {}),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

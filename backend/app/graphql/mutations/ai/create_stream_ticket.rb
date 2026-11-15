@@ -54,6 +54,10 @@ module Mutations
                required: false,
                description: "lesson only: the in-place regenerate flag (epic-36 T2 — clear the lesson's outline + sections on the SAME row, then the op re-derives the outline from the CURRENT grounding and re-fills every section; each call re-counts against the daily cap)."
 
+      argument :provider, Types::Ai::ProviderOverrideInput,
+               required: false,
+               description: "BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the server's for THIS call (their key pays it; no shared daily cap)."
+
       field :token, String,
             null: false,
             description: "The opaque single-use secret — carried as /api/stream?ticket=… (log exposure accepted, AD-16)."
@@ -61,7 +65,7 @@ module Mutations
             null: false,
             description: "When the ticket dies (~60s TTL; expired → 401)."
 
-      def resolve(op:, language:, material_id: nil, question: nil, position: nil, selection: nil, escalated: nil, message: nil, materials: nil, plan_id: nil, mistake_entry_id: nil, node_id: nil, lesson_id: nil, regenerate: nil)
+      def resolve(op:, language:, material_id: nil, question: nil, position: nil, selection: nil, escalated: nil, message: nil, materials: nil, plan_id: nil, mistake_entry_id: nil, node_id: nil, lesson_id: nil, regenerate: nil, provider: nil)
         result = command_result(::Ai::CreateStreamTicketCommand.call(
           current_user: current_user!,
           op: op,
@@ -77,7 +81,8 @@ module Mutations
           mistake_entry_id: mistake_entry_id,
           node_id: node_id,
           lesson_id: lesson_id,
-          regenerate: regenerate
+          regenerate: regenerate,
+          provider_override: provider&.to_h
         ))
         ticket = result[:ticket]
         { token: ticket.token, expires_at: ticket.expires_at }

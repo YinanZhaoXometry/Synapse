@@ -71,6 +71,7 @@ module Ai
     option :client_uuid
     option :mode
     option :language
+    option :provider_override, optional: true
     option :plan_id, optional: true
     option :task_id, optional: true
     # The QuizTargetingInput as a plain Hash ({ node_id: } | {}) — the
@@ -108,7 +109,7 @@ module Ai
       context = build_context(scope.value!)
       return context if context.failure?
 
-      provider = Ai::Provider.complete(user: current_user, messages: build_messages(scope.value!, context.value!))
+      provider = Ai::Provider.complete(user: current_user, override: provider_override, messages: build_messages(scope.value!, context.value!))
       return provider if provider.failure?
 
       questions = normalize_questions(provider.value!, scope.value!)

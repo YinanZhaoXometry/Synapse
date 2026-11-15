@@ -37,6 +37,7 @@ module Ai
     option :current_user
     option :client_uuid
     option :language
+    option :provider_override, optional: true
     option :plan_id, optional: true
     option :node_id, optional: true
     option :material_id, optional: true
@@ -109,7 +110,7 @@ module Ai
                          field: :nodeId })
       end
 
-      provider = Ai::Provider.complete(user: current_user,
+      provider = Ai::Provider.complete(user: current_user, override: provider_override,
                                        messages: Ai::Prompts.lesson_outline(
                                          language: language,
                                          context: grounding,

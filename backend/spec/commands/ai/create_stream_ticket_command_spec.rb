@@ -271,4 +271,35 @@ RSpec.describe Ai::CreateStreamTicketCommand do
       expect(Ai.stream_ticket_ttl_seconds).to eq(30)
     end
   end
+
+  # BYOK (epic 39 T2): a valid provider override rides the ticket payload
+  # (string-keyed, redeem-side trusted); an invalid one fails the MINT so the
+  # mutation surfaces VALIDATION_FAILED, never the SSE stream.
+  describe "BYOK provider override (epic 39)" do
+    let(:material) { create(:material, user: user, sections: [ { "id" => "s1", "title" => "t", "text" => "x" } ]) }
+    let(:base_inputs) do
+      { current_user: user, op: "companion", language: "zh",
+        material_id: material.id, question: "q",
+        position: { locator: { kind: "markdown", section_id: "s1" }, text: "x" } }
+    end
+    let(:provider) { { baseUrl: "https://api.example.com/v1", model: "m", apiKey: "k" } }
+
+    it "stashes the validated override in the ticket payload" do
+      ticket = described_class.call(**base_inputs, provider_override: provider).value![:ticket]
+      expect(ticket.payload["provider"]).to eq(
+        "base_url" => "https://api.example.com/v1", "model" => "m", "api_key" => "k"
+      )
+    end
+
+    it "keeps the payload provider-less when no override rides" do
+      ticket = described_class.call(**base_inputs).value![:ticket]
+      expect(ticket.payload).not_to have_key("provider")
+    end
+
+    it "refuses an invalid override at mint" do
+      result = described_class.call(**base_inputs, provider_override: { baseUrl: "http://insecure" })
+      expect(result).to be_failure
+      expect(result.failure.code).to eq(:VALIDATION_FAILED)
+    end
+  end
 end

@@ -14,6 +14,7 @@ import { recordNavPathname } from "@/lib/nav-history";
 import { NAV_GROUPS, NAV_ROUTES, SETTINGS_ROUTE, flatNav, mobileNavPaths } from "@/components/layout/nav-items";
 import SidebarPlanTree from "@/components/layout/SidebarPlanTree";
 import { ShellChromeProvider } from "./shell-chrome";
+import { isMacDesktopShell } from "@/lib/desktop";
 import { cn } from "@/lib/utils";
 
 const mobileNav = mobileNavPaths
@@ -205,11 +206,30 @@ export default function AppLayout() {
   return (
     <ShellChromeProvider value={{ chromeHidden, setChromeHidden }}>
     <div className="flex h-screen overflow-hidden">
-      {/* Full sidebar (lg+) — chromeHidden unmounts it (immersive reading) */}
+      {/* macOS hidden title bar (epic 39 T1): immersive mode unmounts every
+          chrome surface, so a transparent top strip keeps the window
+          draggable while the reader owns the viewport. */}
+      {isMacDesktopShell && chromeHidden && <div className="desktop-drag-strip" aria-hidden="true" />}
+      {/* Full sidebar (lg+) — chromeHidden unmounts it (immersive reading).
+          Desktop-mac: the sidebar IS the title bar (drag region; interactive
+          descendants opt out via .desktop-drag-region CSS). */}
       {!chromeHidden && (
-      <aside className="hidden lg:flex w-[264px] flex-col gap-2 glass-panel border-r px-3 pt-3.5 pb-3" aria-label={t("common.navAria")}>
-        {/* Brand */}
-        <div className="flex items-center gap-2.5 px-2 pt-1.5 pb-3.5 border-b border-border-soft">
+      <aside
+        className={cn(
+          "hidden lg:flex w-[264px] flex-col gap-2 glass-panel border-r px-3 pt-3.5 pb-3",
+          // desktop-mac: the brand row shares its line with the traffic
+          // lights (center y ≈ 23) — tighten the stacked top paddings so the
+          // logo centers on them instead of floating below.
+          isMacDesktopShell && "desktop-drag-region !pt-[2px]"
+        )}
+        aria-label={t("common.navAria")}
+      >
+        {/* Brand — the spacer clears the macOS traffic lights (same row). */}
+        <div className={cn(
+          "flex items-center gap-2.5 px-2 pt-1.5 pb-3.5 border-b border-border-soft",
+          isMacDesktopShell && "!pt-0"
+        )}>
+          {isMacDesktopShell && <span className="w-[60px] shrink-0" aria-hidden="true" />}
           <img src="/logo.png" alt="" aria-hidden="true" className="w-[34px] h-[34px] rounded-[11px] shadow-brand shrink-0" />
           <span className="flex flex-col leading-tight min-w-0">
             <span className="font-display font-semibold text-xl tracking-tight text-foreground">Synapse</span>

@@ -277,4 +277,54 @@ RSpec.describe Ai::Provider do
       end
     end
   end
+
+  # BYOK (epic 39 T2): a caller-supplied provider rides the caller's own
+  # endpoint — no server configured? gate, no shared DailyCap — while an
+  # invalid override refuses VALIDATION_FAILED before any client is built.
+  describe "BYOK override (epic 39)" do
+    let(:override_client) { double("override client", complete: "answer") }
+    let(:override) do
+      { baseUrl: "https://api.example.com/v1", model: "m", apiKey: "k" }
+    end
+
+    before do
+      allow(described_class).to receive(:override_adapter).and_return(override_client)
+    end
+
+    it "routes the call to the override adapter and never touches the shared cap" do
+      result = described_class.complete(user: user, messages: [], override: override)
+      aggregate_failures do
+        expect(result).to be_success
+        expect(result.value!).to eq("answer")
+        expect(override_client).to have_received(:complete).once
+        expect(described_class).not_to have_received(:adapter)
+        expect(user.ai_usage_counters.count).to eq(0)
+      end
+    end
+
+    it "works with the server provider entirely unconfigured (AI_API_KEY blank)" do
+      ENV.delete("AI_API_KEY")
+      expect(described_class).not_to be_configured
+      expect(described_class.complete(user: user, messages: [], override: override)).to be_success
+    end
+
+    it "refuses a partial override with VALIDATION_FAILED before building a client" do
+      result = described_class.complete(user: user, messages: [], override: { baseUrl: "https://x.example" })
+      aggregate_failures do
+        expect(result).to be_failure
+        expect(result.failure.code).to eq(:VALIDATION_FAILED)
+        expect(override_client).not_to have_received(:complete)
+      end
+    end
+
+    it "streams through the override adapter too" do
+      allow(override_client).to receive(:stream).and_return(%w[a b].each)
+      result = described_class.stream(user: user, messages: [], override: override)
+      aggregate_failures do
+        expect(result).to be_success
+        expect(result.value!.to_a).to eq(%w[a b])
+        expect(user.ai_usage_counters.count).to eq(0)
+      end
+    end
+  end
 end
