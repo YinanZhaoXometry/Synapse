@@ -299,6 +299,16 @@ export default function ReaderPage() {
   useEffect(() => {
     if (!immersive) setFloatExpanded(false);
   }, [immersive]);
+  // PDF zoom (owner bug round 2026-11-15): fit-width is no longer the only
+  // size — a discrete ladder over fit-width, stepped by the top-bar controls
+  // and rendered by PdfPageFlow through the width seam. 1 = fit-width.
+  const [pdfZoom, setPdfZoom] = useState(1);
+  const PDF_ZOOM_MIN = 0.5;
+  const PDF_ZOOM_MAX = 3;
+  const zoomIn = () =>
+    setPdfZoom((z) => Math.min(PDF_ZOOM_MAX, Math.round((z + 0.25) * 100) / 100));
+  const zoomOut = () =>
+    setPdfZoom((z) => Math.max(PDF_ZOOM_MIN, Math.round((z - 0.25) * 100) / 100));
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState<number | null>(null);
   const flowRef = useRef<PdfFlowHandle | null>(null);
@@ -757,16 +767,6 @@ export default function ReaderPage() {
   }
 
   const pagerVisible = totalPages !== null;
-  // PDF zoom (owner bug round 2026-11-15): fit-width is no longer the only
-  // size — a discrete ladder over fit-width, stepped by the top-bar controls
-  // and rendered by PdfPageFlow through the width seam. 1 = fit-width.
-  const [pdfZoom, setPdfZoom] = useState(1);
-  const PDF_ZOOM_MIN = 0.5;
-  const PDF_ZOOM_MAX = 3;
-  const zoomIn = () =>
-    setPdfZoom((z) => Math.min(PDF_ZOOM_MAX, Math.round((z + 0.25) * 100) / 100));
-  const zoomOut = () =>
-    setPdfZoom((z) => Math.max(PDF_ZOOM_MIN, Math.round((z - 0.25) * 100) / 100));
   // Source-aware back (2026-11-06): the reader has 8+ inbound origins (materials
   // hub, mistakes citations, tutor citations, task/plan homes) — a hub/task
   // origin returns there instead of the hardcoded plan spine (the plan origin
