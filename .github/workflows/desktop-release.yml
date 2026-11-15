@@ -1,15 +1,15 @@
-# Desktop Release (epic 38) — one GitHub Release per green merge to main.
+# Desktop Release (epic 38) — tag-driven releases, the industry posture:
+# merges accumulate on main WITHOUT releasing; a release happens only when a
+# `desktop-v<version>` tag is pushed (`just desktop-release` does the tagging
+# after desktop/package.json's version is bumped). The tag's CI run builds
+# mac + win and publishes the GitHub Release under that exact tag, marked
+# latest.
 #
-# Trigger chain: CI completes → workflow_run fires → guard admits only
-# (event=push, head_branch=main, conclusion=success) → mac + win build the
-# SAME head_sha → the release job publishes a desktop-v<N> tag with the three
-# artifacts and marks it latest. The pre-merge verification path is the
-# pull_request trigger (narrow paths filter, build-only — GitHub only
-# registers workflow_dispatch for workflows already on the DEFAULT branch, so
-# a branch-only workflow cannot be dispatched before its first merge; the PR
-# run covers exactly that gap). workflow_dispatch remains for manual runs
-# post-merge (release ONLY when dispatched on main). The gates themselves
-# live in ci.yml and are what "green merge" refers to.
+# Other triggers stay build-only (no release): pull_request (narrow paths
+# filter — the pre-merge verification path for both installers) and
+# workflow_dispatch (now that the workflow is registered on the default
+# branch, any branch can be dispatched for a verification build). The gates
+# themselves live in ci.yml.
 #
 # No repository secrets: the api URL default is the real deployed service
 # (synapse-api-0lf4 — extracted from the live web bundle 2026-11-15),
@@ -18,9 +18,9 @@
 name: Desktop Release
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  push:
+    tags:
+      - "desktop-v*"
   pull_request:
     branches: [main]
     paths:
@@ -31,7 +31,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: desktop-release-${{ github.event.workflow_run.head_sha || github.sha }}
+  group: desktop-release-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -48,33 +48,23 @@ jobs:
       sha: ${{ steps.decide.outputs.sha }}
       should_build: ${{ steps.decide.outputs.should_build }}
       should_release: ${{ steps.decide.outputs.should_release }}
+      tag: ${{ steps.decide.outputs.tag }}
     steps:
       - name: Decide
         id: decide
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # PR verification: build the merge commit, never release.
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_type }}" = "tag" ]; then
+            # The release path: a desktop-v<version> tag was pushed.
             echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-            echo "should_build=true" >> "$GITHUB_OUTPUT"
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-            echo "should_build=true" >> "$GITHUB_OUTPUT"
-            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-              echo "should_release=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "should_release=false" >> "$GITHUB_OUTPUT"
-            fi
-          elif [ "${{ github.event.workflow_run.event }}" = "push" ] \
-            && [ "${{ github.event.workflow_run.head_branch }}" = "main" ] \
-            && [ "${{ github.event.workflow_run.conclusion }}" = "success" ]; then
-            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
             echo "should_build=true" >> "$GITHUB_OUTPUT"
             echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           else
-            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
-            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            # pull_request / workflow_dispatch: verification builds only.
+            echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
             echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "tag=" >> "$GITHUB_OUTPUT"
           fi
 
   build:
@@ -169,19 +159,32 @@ jobs:
         with:
           path: artifacts
 
+      # The tag IS the version contract: the tag's suffix must equal
+      # desktop/package.json's version, or the installers would carry a
+      # different version than the release they ship in.
+      - name: Tag ↔ package.json version guard
+        run: |
+          TAG_VERSION="${{ needs.guard.outputs.tag }}"
+          TAG_VERSION="${TAG_VERSION#desktop-v}"
+          PKG_VERSION="$(jq -r .version desktop/package.json)"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "tag ${{ needs.guard.outputs.tag }} does not match desktop/package.json version ${PKG_VERSION} — bump the version, then re-tag" >&2
+            exit 1
+          fi
+
       - name: Compose release notes
         run: |
           SHA="${{ needs.guard.outputs.sha }}"
-          TAG="desktop-v${{ github.run_number }}"
-          SUBJECT="$(git log -1 --format=%s "$SHA")"
+          TAG="${{ needs.guard.outputs.tag }}"
+          VERSION="${TAG#desktop-v}"
           PREV="$(git tag --list 'desktop-v*' --sort=-creatordate | grep -v "^${TAG}$" | head -n1 || true)"
           {
-            echo "Synapse Desktop build ${{ github.run_number }} — ${SUBJECT}"
+            echo "Synapse Desktop ${VERSION}"
             echo
             echo "## Commits"
             echo
             if [ -n "$PREV" ]; then
-              git log --oneline "${PREV}..${SHA}"
+              git log --oneline "${PREV}..${TAG}"
             else
               git log --oneline "$SHA" | head -n 20
               echo "_first desktop release — latest 20 commits only_"
@@ -189,16 +192,14 @@ jobs:
             echo
             cat .github/workflows/desktop-release-notes.md
           } > release-notes.md
-          echo "TAG=$TAG" >> "$GITHUB_ENV"
 
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$TAG" \
+          gh release create "${{ needs.guard.outputs.tag }}" \
             artifacts/desktop-macos/*.dmg \
             artifacts/desktop-windows/*.exe \
-            --target "$SHA" \
-            --title "Synapse Desktop ${{ github.run_number }}" \
+            --title "Synapse Desktop ${{ needs.guard.outputs.tag }}" \
             --notes-file release-notes.md \
             --latest
