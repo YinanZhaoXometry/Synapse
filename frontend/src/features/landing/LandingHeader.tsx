@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { BrandMark, CloseIcon, DownloadIcon, MenuIcon } from "./landing-icons";
+import { BrandMark, CloseIcon, DownloadIcon, GithubIcon, MenuIcon } from "./landing-icons";
+
+/** The repository (owner ask 2026-11-15): linked from the header pill, the
+ * mobile menu, and the footer nav. */
+export const LANDING_REPO_URL = "https://github.com/YinanZhaoXometry/Synapse";
 
 // The five in-page anchors the header nav + scrollspy share (landing sections).
+
 export const LANDING_SECTIONS = ["lp-workflow", "lp-features", "lp-preview", "lp-scenarios", "lp-faq"] as const;
 
 export function LandingHeader({ onOpenDownload }: { onOpenDownload: (event: React.MouseEvent) => void }) {
@@ -110,6 +115,15 @@ export function LandingHeader({ onOpenDownload }: { onOpenDownload: (event: Reac
           >
             {language === "zh" ? "EN" : "中文"}
           </button>
+          <a
+            className="lp-github-link"
+            href={LANDING_REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={t("landing.header.githubAria")}
+          >
+            <GithubIcon />
+          </a>
           <Link className="lp-login-link" to="/login">
             {t("landing.header.login")}
           </Link>
@@ -136,7 +150,11 @@ export function LandingHeader({ onOpenDownload }: { onOpenDownload: (event: Reac
                 {t(item.key)}
               </a>
             ))}
+            <a className="lp-nav-link" href={LANDING_REPO_URL} target="_blank" rel="noreferrer">
+              <GithubIcon /> GitHub
+            </a>
             <Link className="lp-nav-link" to="/login" onClick={() => setMenuOpen(false)}>
+
               {t("landing.header.login")}
             </Link>
           </nav>
