@@ -235,7 +235,9 @@ describe("FlashcardsPage — the deck's Anki export (epic-31 T4)", () => {
     const createSpy = vi.spyOn(document, "createElement");
     const handlers = {
       ...hubHandlers([deck({ materialId: "m-plan-1", materialTitle: "复习讲义.md", planId: PLAN_1, planTitle: "软工备考", cardCount: 12 })]),
-      FlashcardExport: vi.fn(() => ({ flashcardExport: "#separator:tab\n#html:true\nrow\there" })),
+      // Typed zero-arg mock makes .mock.calls[0] an empty tuple — index [0]
+      // on it is TS2493 (the 2026-11-10 CI red); declare the wire input.
+      FlashcardExport: vi.fn((_vars: { materialId: string }) => ({ flashcardExport: "#separator:tab\n#html:true\nrow\there" })),
     };
 
     renderFlashcardsPage(handlers);
