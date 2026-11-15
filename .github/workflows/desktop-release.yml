@@ -3,10 +3,13 @@
 # Trigger chain: CI completes → workflow_run fires → guard admits only
 # (event=push, head_branch=main, conclusion=success) → mac + win build the
 # SAME head_sha → the release job publishes a desktop-v<N> tag with the three
-# artifacts and marks it latest. workflow_dispatch builds without releasing
-# on any branch (release ONLY when dispatched on main) — that is the
-# pre-merge verification path for both installers; the gates themselves live
-# in ci.yml and are what "green merge" refers to.
+# artifacts and marks it latest. The pre-merge verification path is the
+# pull_request trigger (narrow paths filter, build-only — GitHub only
+# registers workflow_dispatch for workflows already on the DEFAULT branch, so
+# a branch-only workflow cannot be dispatched before its first merge; the PR
+# run covers exactly that gap). workflow_dispatch remains for manual runs
+# post-merge (release ONLY when dispatched on main). The gates themselves
+# live in ci.yml and are what "green merge" refers to.
 #
 # No repository secrets: the api URL default is the real deployed service
 # (synapse-api-0lf4 — extracted from the live web bundle 2026-11-15),
@@ -18,6 +21,13 @@ on:
   workflow_run:
     workflows: [CI]
     types: [completed]
+  pull_request:
+    branches: [main]
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-release.yml"
+      - ".github/workflows/desktop-release-notes.md"
+      - "justfile"
   workflow_dispatch:
 
 concurrency:
@@ -42,7 +52,12 @@ jobs:
       - name: Decide
         id: decide
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # PR verification: build the merge commit, never release.
+            echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
             echo "should_build=true" >> "$GITHUB_OUTPUT"
             if [ "${{ github.ref }}" = "refs/heads/main" ]; then

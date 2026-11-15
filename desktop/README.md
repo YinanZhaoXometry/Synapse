@@ -45,9 +45,10 @@ never as a source.
 `.github/workflows/desktop-release.yml` fires after CI completes green on
 `main` (via `workflow_run`): mac + win build the merge commit, and a
 `desktop-v<N>` GitHub Release ships `Synapse-<ver>-arm64.dmg`,
-`Synapse-<ver>-x64.dmg`, `Synapse-Setup-<ver>-x64.exe`. `workflow_dispatch`
-on a branch builds without releasing — that is the pre-merge verification
-path.
+`Synapse-<ver>-x64.dmg`, `Synapse-Setup-<ver>-x64.exe`. Pull requests that
+touch `desktop/**` (narrow paths filter) run the same builds without
+releasing — the pre-merge verification path; `workflow_dispatch` is the
+post-merge manual knob (releases only when dispatched on `main`).
 
 ## Origins / CORS (the one deploy dependency)
 
