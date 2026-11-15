@@ -304,8 +304,17 @@ export const PdfPageFlow = forwardRef<PdfFlowHandle, PdfPageFlowProps>(function 
     // `relative` makes the scroll container the pages' offsetParent, so their
     // offsetTop/offsetHeight are content coordinates (same contract as
     // MarkdownFlow's measured boundaries).
-    <div ref={scrollRef} className="relative flex-1 min-h-0 overflow-y-auto bg-secondary/50">
-      <div ref={columnRef} className="mx-auto w-full max-w-[980px] px-4 md:px-8 py-6 md:py-8 flex flex-col gap-6">
+    //
+    // select-none (owner bug round 2026-11-15): a drag anchored on any
+    // non-text surface here — the gutter, a page's padding, the canvas — used
+    // to sweep the ENTIRE page's text layer into the selection (the
+    // container was the selection anchor, and every span below was reachable
+    // from it). Only the text layer opts back in (its `user-select: text` in
+    // index.css beats an ancestor's none), so a drag can only ever anchor on
+    // real text — the pdf.js viewer's container-side half of the contract
+    // the .pdf-text-layer port had left out.
+    <div ref={scrollRef} className="relative flex-1 min-h-0 overflow-y-auto select-none bg-secondary/50">
+      <div ref={columnRef} className="mx-auto w-full max-w-[980px] px-4 md:px-8 py-6 md:py-8 flex flex-col gap-6 select-none">
         {!doc || columnWidth === null
           ? null
           : Array.from({ length: doc.numPages }, (_, i) => i + 1).map((n) => {
@@ -548,7 +557,7 @@ function PdfPageCanvas({ doc, pageNumber, width, height, shouldRender, flash, an
       role="group"
       aria-label={t("reader.pageAria", { n: pageNumber })}
       className={cn(
-        "relative mx-auto bg-card shadow-raised rounded-[4px] overflow-hidden",
+        "relative mx-auto bg-card shadow-raised rounded-[4px] overflow-hidden select-none",
         marking && "group",
       )}
       style={{ width, height }}

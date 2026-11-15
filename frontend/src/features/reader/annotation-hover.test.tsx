@@ -409,4 +409,25 @@ describe("annotation hover-remove — the pdf page surfaces (2026-11-09 hotfix)"
     expect(view.container.querySelector('[data-testid="annotation-hover-popover"]')).toBeNull();
     expect(onRemoveAnnotation).not.toHaveBeenCalled();
   });
+
+  // The selection gate (owner bug round 2026-11-15): a drag anchored on the
+  // gutter / page padding / canvas must not sweep the whole page's text layer
+  // into the selection — the containers are select-none and ONLY the text
+  // layer opts back in (its user-select: text in index.css beats an
+  // ancestor's none). jsdom runs no selection geometry, so this pins the
+  // markup half of the contract.
+  it("the PDF containers are select-none; the text layer is the sole opt-back-in surface", async () => {
+    const view = renderFlow({});
+    const scroll = await waitFor(() => {
+      const el = view.container.querySelector(".pdf-text-layer");
+      expect(el).not.toBeNull();
+      return el!.parentElement!.parentElement!; // page box → column → scroll container
+    });
+    expect(scroll.className).toContain("select-none");
+    // The page box itself (the drag-anchor surface the bug reported).
+    const pageBox = view.container.querySelector('[data-page="1"]')!;
+    expect(pageBox.className).toContain("select-none");
+    // The text layer keeps the opt-in class the CSS contract hangs on.
+    expect(view.container.querySelector(".pdf-text-layer")).not.toBeNull();
+  });
 });
