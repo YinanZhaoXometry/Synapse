@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -9,9 +9,10 @@ import LandingPage from "./LandingPage";
 
 /**
  * LandingPage direct (epic-37): the landing composes fully in both providers +
- * a router, the demo tabs / capability links / FAQ / download dialog behave as
- * the design's app.js spells them, the header's sign-in link routes to the
- * wall, and the page owns its document.title for its lifetime only.
+ * a router, the demo tabs / capability links / FAQ behave as the design's
+ * app.js spells them, the download CTAs leave for the GitHub releases page
+ * (owner round 2026-11-15), the header's sign-in link routes to the wall, and
+ * the page owns its document.title for its lifetime only.
  */
 
 const zh = translations.zh as Record<string, string>;
@@ -131,26 +132,21 @@ describe("LandingPage — the marketing root", () => {
     expect(firstAnswer).not.toBeVisible();
   });
 
-  it("opens the download dialog from the hero CTA, confirms a platform, closes with focus restored", async () => {
-    const user = userEvent.setup();
+  it("the download CTAs leave for the GitHub releases page (owner round 2026-11-15)", async () => {
     renderLanding();
     await screen.findByText(zh["landing.hero.lead"]);
-    const dialog = () => document.querySelector("#lp-download-dialog") as HTMLDialogElement;
-
     // 下载 Synapse labels both the hero CTA and the download-section CTA; the
-    // hero button comes first in the DOM.
-    const heroCta = screen.getAllByRole("button", { name: zh["landing.hero.download"] })[0];
-    await user.click(heroCta);
-    await waitFor(() => expect(dialog().open).toBe(true));
-    expect(screen.getByText(zh["landing.dialog.title"])).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: zh["landing.dialog.confirm"] }));
-    expect(screen.getByText(zh["landing.dialog.status"].replace("{platform}", "macOS"))).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: zh["landing.dialog.closeAria"] }));
-    await waitFor(() => expect(dialog().open).toBe(false));
-    // The trigger gets its focus back (design behavior).
-    await waitFor(() => expect(heroCta).toHaveFocus());
+    // header button is 下载. All three anchor out to the releases page.
+    const releasesHref = "https://github.com/YinanZhaoXometry/Synapse/releases";
+    for (const name of [zh["landing.hero.download"], zh["landing.header.download"]]) {
+      const links = screen.getAllByRole("link", { name });
+      expect(links.length).toBeGreaterThan(0);
+      for (const link of links) {
+        expect(link).toHaveAttribute("href", releasesHref);
+        expect(link).toHaveAttribute("target", "_blank");
+        expect(link).toHaveAttribute("rel", "noreferrer");
+      }
+    }
   });
 
   it("the header's sign-in link routes to the wall (/login)", async () => {
@@ -161,19 +157,21 @@ describe("LandingPage — the marketing root", () => {
     expect(screen.getByText("login-sentinel")).toBeVisible();
   });
 
-  it("the header's language toggle swaps the whole page to English and persists", async () => {
+  it("the header language menu swaps the whole page to English and persists", async () => {
     const user = userEvent.setup();
     renderLanding();
     await screen.findByText(zh["landing.hero.lead"]);
-    // zh mode shows the language you'd switch to…
-    const toggle = screen.getByRole("button", { name: zh["common.switchLang"] });
-    expect(toggle).toHaveTextContent("EN");
-    await user.click(toggle);
-    // …and the page re-renders in English (hero copy + toggle label flip;
-    // the aria-label rides the active locale too).
+    // The ghost globe trigger opens the three locales (Radix menu); the active
+    // language carries the data-active check.
+    await user.click(screen.getByRole("button", { name: zh["common.switchLang"] }));
+    expect(screen.getByRole("menu")).toBeVisible();
+    expect(screen.getByRole("menuitem", { name: "简体中文" })).toHaveAttribute("data-active");
+    expect(screen.getByRole("menuitem", { name: "English" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "繁體中文" })).toBeInTheDocument();
+    await user.click(screen.getByRole("menuitem", { name: "English" }));
+    // The page re-renders in English and the app's own language seam carries
+    // the choice (shared with the app).
     expect(await screen.findByText(translations.en["landing.hero.lead"])).toBeVisible();
-    expect(screen.getByRole("button", { name: translations.en["common.switchLang"] })).toHaveTextContent("中文");
-    // The app's own language seam carries the choice (shared with the app).
     expect(localStorage.getItem("synapse-lang")).toBe("en");
   });
 

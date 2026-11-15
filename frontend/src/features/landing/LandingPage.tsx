@@ -1,6 +1,6 @@
 import "./landing.css";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { isMacDesktopShell } from "@/lib/desktop";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -8,24 +8,22 @@ import { LandingHeader } from "./LandingHeader";
 import { LandingHero } from "./LandingHero";
 import { LandingCapabilities, LandingFaq, LandingScenarios, LandingStatement, LandingWorkflow, type DemoTabId } from "./LandingSections";
 import { LandingPreview } from "./LandingPreview";
-import { DownloadDialog, LandingDownloadSection } from "./LandingDownload";
+import { LandingDownloadSection } from "./LandingDownload";
 import { LandingFooter } from "./LandingFooter";
 
 /**
  * The marketing landing page (epic-37) — the root route's face for logged-out
  * visitors (AD-8 amendment: a token at `/` still goes straight to Plans Home).
  * Ported from the Open Design deliverable with an `lp-` namespace (see
- * landing.css); the page keeps its fixed warm palette regardless of the app
- * theme, and carries the only two pieces of global state it touches: the demo
- * tab shared by the capability links + preview stage, and the download dialog
- * (any of its three triggers restores focus on close).
+ * landing.css); the page keeps its fixed dark palette regardless of the app
+ * theme, and carries the only piece of global state it touches: the demo tab
+ * shared by the capability links + preview stage. Download CTAs leave for the
+ * GitHub releases page (owner round 2026-11-15).
  */
 export default function LandingPage() {
   const { t } = useLanguage();
   const { reduceMotion } = useTheme();
   const [activeDemo, setActiveDemo] = useState<DemoTabId>("organize");
-  const [downloadOpen, setDownloadOpen] = useState(false);
-  const downloadTriggerRef = useRef<HTMLElement | null>(null);
 
   // Smooth-scroll + header scroll-padding live on <html> (the page's scroll
   // container), gated behind a landing-only class so the app is untouched.
@@ -44,11 +42,6 @@ export default function LandingPage() {
     };
   }, [t]);
 
-  const openDownload = (event: React.MouseEvent) => {
-    downloadTriggerRef.current = event.currentTarget as HTMLElement;
-    setDownloadOpen(true);
-  };
-
   return (
     <div className={reduceMotion ? "lp-root lp-reduce-motion" : "lp-root"}>
       {/* Pre-login surfaces render outside AppLayout (no sidebar = no drag
@@ -58,19 +51,18 @@ export default function LandingPage() {
       <a className="lp-skip-link" href="#lp-main">
         {t("landing.skip")}
       </a>
-      <LandingHeader onOpenDownload={openDownload} />
+      <LandingHeader />
       <main id="lp-main">
-        <LandingHero onOpenDownload={openDownload} />
+        <LandingHero />
         <LandingStatement />
         <LandingWorkflow />
         <LandingCapabilities onSelectDemo={setActiveDemo} />
         <LandingPreview activeTab={activeDemo} onSelectTab={setActiveDemo} />
         <LandingScenarios />
-        <LandingDownloadSection onOpen={openDownload} />
+        <LandingDownloadSection />
         <LandingFaq />
       </main>
       <LandingFooter />
-      <DownloadDialog open={downloadOpen} onClose={() => setDownloadOpen(false)} triggerRef={downloadTriggerRef} />
     </div>
   );
 }
