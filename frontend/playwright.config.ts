@@ -28,6 +28,12 @@ import { defineConfig, type PlaywrightTestConfig } from "@playwright/test";
  * Run:  npx playwright test   (or: npm run test:e2e, from frontend/)
  */
 const stubPort = Number(process.env.E2E_PROVIDER_PORT || 8791);
+// The dev-server webServer entry follows E2E_BASE_URL (epic-37): a parallel
+// worktree run points at ITS own dev server (e.g. :8081) while the shared
+// backend stack on :3000 serves both. Default behavior is unchanged — the
+// plain local/CI run still boots/reuses :8080.
+const baseURL = process.env.E2E_BASE_URL || "http://localhost:8080";
+const webPort = new URL(baseURL).port || "8080";
 
 const config: PlaywrightTestConfig = {
   testDir: "./e2e",
@@ -43,7 +49,7 @@ const config: PlaywrightTestConfig = {
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? [["html", { open: "never" }], ["list"]] : [["list"]],
   use: {
-    baseURL: process.env.E2E_BASE_URL || "http://localhost:8080",
+    baseURL,
     // The UI's language defaults to zh (the synapse-lang key is lazy-written,
     // reads fall back to zh) — pin the locale so the zh selectors are stable.
     locale: "zh-CN",
@@ -64,8 +70,8 @@ const config: PlaywrightTestConfig = {
       timeout: 15_000,
     },
     {
-      command: "npm run dev",
-      url: "http://localhost:8080",
+      command: `npm run dev -- --port ${webPort}`,
+      url: baseURL,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },

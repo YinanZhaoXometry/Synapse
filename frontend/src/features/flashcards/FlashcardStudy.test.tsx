@@ -148,7 +148,11 @@ describe("FlashcardStudy — the difficulty trio persists through the rating mut
 
     fireEvent.keyDown(window, { key: "ArrowLeft" }); // free navigation back
     fireEvent.keyDown(window, { key: " " }); // …flip again
-    expect(screen.getByTestId("flashcards-rate-easy")).toHaveAttribute("aria-pressed", "true");
+    // The saved-rating read settles a beat after the flip render (an effect,
+    // not the keyDown's own setState) — under a loaded runner that beat is
+    // real (epic-37's suite weight exposed it on CI). Poll for the pressed
+    // state instead of asserting it synchronously.
+    await waitFor(() => expect(screen.getByTestId("flashcards-rate-easy")).toHaveAttribute("aria-pressed", "true"));
     expect(screen.getByTestId("flashcards-saved-rating")).toHaveTextContent(zh("flashcards.study.savedRating"));
 
     // re-rating is allowed — latest wins, still self-rating only

@@ -60,3 +60,18 @@ if (typeof window.IntersectionObserver === "undefined") {
 if (typeof Element.prototype.scrollIntoView === "undefined") {
   Element.prototype.scrollIntoView = () => {};
 }
+
+// jsdom's HTMLDialogElement lacks showModal/close (the landing's download
+// dialog, epic-37, is the first native-dialog consumer). The stubs keep the
+// `open` attribute honest — that reflection is all the component + assertions
+// rely on; there is no top layer in jsdom to emulate.
+if (typeof HTMLDialogElement.prototype.showModal !== "function") {
+  HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+    this.open = true;
+  };
+}
+if (typeof HTMLDialogElement.prototype.close !== "function") {
+  HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+    this.open = false;
+  };
+}

@@ -9,7 +9,7 @@ import { parseMaterialBytes } from "./parse-material";
  * parsed|failed state machine and the outcome write-back live in the
  * use-parse-material hook seam (Apollo mutation); this suite pins the outcome
  * mapping and the no-bytes honesty rule. Prior art: parse.test.ts (the
- * pipeline itself) / entry-decision.test.ts (state transitions).
+ * pipeline itself) / anchors.test.ts (pure parsing seams).
  *
  * The tests use Node's Blob because jsdom 20's lacks arrayBuffer(); a real
  * browser Blob (what the attach flow stores) has it, and the production code

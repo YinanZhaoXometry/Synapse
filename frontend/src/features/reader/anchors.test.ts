@@ -3,7 +3,7 @@ import { parseReaderHash, parseReaderSearchParams, readerAnchorHref, readerSecti
 
 /**
  * Reader anchor params (AD-8) — pure parsing seam (canvas rendering is not
- * component-tested; jsdom cannot exercise it). Prior art: entry-decision.test.ts.
+ * component-tested; jsdom cannot exercise it). Prior art: streak.test.ts.
  */
 describe("parseReaderSearchParams (AD-8 anchors)", () => {
   it("?page=N is a 1-based page target", () => {

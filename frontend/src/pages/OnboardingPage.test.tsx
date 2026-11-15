@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { translations } from "@/contexts/i18n-dictionary";
-import { PLANS_HOME_ROUTE } from "@/features/plans/entry-decision";
+import { PLANS_HOME_ROUTE } from "@/pages/OnboardingPage";
 import OnboardingPage from "./OnboardingPage";
 
 /**
