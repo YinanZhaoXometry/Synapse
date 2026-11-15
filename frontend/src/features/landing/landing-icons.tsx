@@ -114,16 +114,12 @@ export function ReviewIcon() {
   );
 }
 
-/** The Synapse mark (header brand + footer), ported verbatim from the design. */
+/**
+ * The Synapse mark (header brand + footer): the app's own /logo.png, same
+ * asset + rounded-corner treatment as AppLayout's brand block (round 3
+ * unification). The round-1 coral SVG mark lives on as a design reference at
+ * docs/design/landing-brand-mark-round1.svg.
+ */
 export function BrandMark({ className = "lp-brand-mark" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 40 40" role="img" aria-hidden="true">
-      <rect x="1" y="1" width="38" height="38" rx="12" fill="var(--lp-peach)" />
-      <path d="M12 14.5 20 20l8-5.5M20 20v8" fill="none" stroke="var(--lp-on-warm)" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="12" cy="14.5" r="3" fill="var(--lp-surface)" stroke="var(--lp-on-warm)" strokeWidth="1.5" />
-      <circle cx="28" cy="14.5" r="3" fill="var(--lp-surface)" stroke="var(--lp-on-warm)" strokeWidth="1.5" />
-      <circle cx="20" cy="20" r="3.2" fill="var(--lp-on-warm)" />
-      <circle cx="20" cy="28" r="2.5" fill="var(--lp-surface)" stroke="var(--lp-on-warm)" strokeWidth="1.5" />
-    </svg>
-  );
+  return <img src="/logo.png" alt="" aria-hidden="true" className={className} draggable={false} />;
 }

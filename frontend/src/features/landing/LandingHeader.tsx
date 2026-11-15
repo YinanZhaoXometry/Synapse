@@ -7,7 +7,7 @@ import { BrandMark, CloseIcon, DownloadIcon, MenuIcon } from "./landing-icons";
 export const LANDING_SECTIONS = ["lp-workflow", "lp-features", "lp-preview", "lp-scenarios", "lp-faq"] as const;
 
 export function LandingHeader({ onOpenDownload }: { onOpenDownload: (event: React.MouseEvent) => void }) {
-  const { t } = useLanguage();
+  const { t, language, setLanguage } = useLanguage();
   const [menuOpen, setMenuOpen] = useState(false);
   const [currentSection, setCurrentSection] = useState("");
   const headerRef = useRef<HTMLElement | null>(null);
@@ -100,6 +100,16 @@ export function LandingHeader({ onOpenDownload }: { onOpenDownload: (event: Reac
           {navItems.map(navLink)}
         </nav>
         <div className="lp-header-actions">
+          {/* Language toggle (round 3): shows the language you'd switch TO,
+              persisting through the app's own synapse-lang seam. */}
+          <button
+            className="lp-lang-toggle"
+            type="button"
+            aria-label={t("common.switchLang")}
+            onClick={() => setLanguage(language === "zh" ? "en" : "zh")}
+          >
+            {language === "zh" ? "EN" : "中文"}
+          </button>
           <Link className="lp-login-link" to="/login">
             {t("landing.header.login")}
           </Link>

@@ -36,3 +36,14 @@ Owner updated the same Open Design project (index.html 12:15 / styles.css 12:16)
 - **Dead CSS skipped**: the deliverable's `.hero-app-*` / `.hero-space-*` / `.hero-focus` family has no markup in its own index.html — not ported (flagged to owner in the PR; if a board sidebar was intended, the markup needs to arrive first).
 - **Latent specificity bug fixed** (exposed by the redesign, present since round 1): the scoped element resets `.lp-root button/a { color: inherit }` (0,1,1) outranked every single-class component color — invisible white-on-white buttons in dark, subtle color drift in round 1. Resets now ride `:where(.lp-root)` (zero specificity), restoring the design's bare-element semantics.
 - Gates: tsc/eslint clean, vitest 137/137, build green, e2e 28 pass/5 deliberate skips, zero horizontal overflow at 320–1440, visual gate PASS (button text verified mechanically: #111214 on white).
+
+## Feedback round #3 (2026-11-15 evening) — polish quartet
+
+Owner's four-point polish pass (T03, `p4-37/t03-landing-polish`):
+
+1. **Language toggle** — header gains an EN/中文 pill (shows the language you'd switch to), flipping the whole page via the app's own `synapse-lang` seam (`setLanguage`); phone header keeps EN + 下载 + burger, the login link folds into the burger menu to make room.
+2. **Brand unification** — the round-1 coral connection-glyph mark is retired: `BrandMark` now renders the app's own `/logo.png` (same asset + rounded-square treatment as AppLayout's brand block). The old mark is preserved at `docs/design/landing-brand-mark-round1.svg` as the owner's future design reference.
+3. **Map dots removed** — the four r=4 accent circles in the hero knowledge map sat exactly on the node card titles (编码/提取/遗忘曲线/间隔重复); deleted (connection dashed lines already carry the semantics; a vitest pins their absence).
+4. **De-numbering** — "01 / 学习闭环"-style eyebrows lose the numeric prefix in all three locales (zh/en/zh-TW); the loop steps, capability rows, and scenario cards swap their 01-04 / SCENE-0N ordinals for semantic lucide icons in soft accent badges (Inbox/Share2/PenLine/History · Network/CalendarDays/MessageCircle/TrendingUp · Target/Compass/Layers) — the machine-generated feel the owner called out.
+
+Gates: tsc/eslint clean · vitest 140 files (4 new tests: lang toggle flip+persist, logo src, map dots absence) · build green · e2e 28 pass · zero horizontal overflow at 390/1440 · visual check zh+en+mobile PASS.

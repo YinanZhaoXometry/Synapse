@@ -119,10 +119,6 @@ export function LandingHero({ onOpenDownload }: { onOpenDownload: (event: React.
                     </text>
                   </g>
                   <circle cx="250" cy="288" r="8" fill="var(--lp-surface)" stroke="var(--lp-map-line)" strokeWidth="1.5" />
-                  <circle cx="119" cy="80" r="4" fill="var(--lp-accent)" />
-                  <circle cx="388" cy="77" r="4" fill="var(--lp-accent)" />
-                  <circle cx="104" cy="251" r="4" fill="var(--lp-accent)" />
-                  <circle cx="394" cy="249" r="4" fill="var(--lp-accent)" />
                 </svg>
               </div>
               <div className="lp-board-next">
