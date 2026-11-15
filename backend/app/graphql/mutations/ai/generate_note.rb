@@ -42,12 +42,16 @@ module Mutations
                required: false,
                description: "Weak-spot targeting (FR-22): present with mode \"weakSpot\" → the plan-scope generation biases toward the learner's weak nodes (the server-computed coverage plan); absent → the plain note (T1 shape)."
 
+      argument :provider, Types::Ai::ProviderOverrideInput,
+               required: false,
+               description: "BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the server's for THIS call (their key pays it; no shared daily cap)."
+
       field :note, Types::NoteType,
             null: false,
             description: "The created (or replayed) note."
 
       def resolve(client_uuid:, scope:, language:, plan_id: nil, node_id: nil, material_id: nil, enrich_at: nil,
-                  targeting: nil)
+                  targeting: nil, provider: nil)
         command_result(::Ai::GenerateNoteCommand.call(
           current_user: current_user!,
           client_uuid: client_uuid,
@@ -57,7 +61,8 @@ module Mutations
           node_id: node_id,
           material_id: material_id,
           enrich_at: enrich_at,
-          targeting: targeting&.to_h
+          targeting: targeting&.to_h,
+          provider_override: provider&.to_h
         ))
       end
     end

@@ -2,6 +2,7 @@ import "./landing.css";
 
 import { useEffect, useRef, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { isMacDesktopShell } from "@/lib/desktop";
 import { useTheme } from "@/contexts/ThemeContext";
 import { LandingHeader } from "./LandingHeader";
 import { LandingHero } from "./LandingHero";
@@ -50,6 +51,10 @@ export default function LandingPage() {
 
   return (
     <div className={reduceMotion ? "lp-root lp-reduce-motion" : "lp-root"}>
+      {/* Pre-login surfaces render outside AppLayout (no sidebar = no drag
+          region): the desktop shell keeps a transparent top strip so the
+          frameless window stays movable here too (epic 39 T1). */}
+      {isMacDesktopShell && <div className="desktop-drag-strip" aria-hidden="true" />}
       <a className="lp-skip-link" href="#lp-main">
         {t("landing.skip")}
       </a>

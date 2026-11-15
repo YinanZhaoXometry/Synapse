@@ -804,6 +804,12 @@ input CreateLessonInput {
   ② only: the plan's uuid (with nodeId — the node's plan).
   """
   planId: String
+
+  """
+  BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the
+  server's for THIS call (their key pays it; no shared daily cap).
+  """
+  provider: ProviderOverrideInput
 }
 
 """
@@ -1115,6 +1121,12 @@ input CreateStreamTicketInput {
   truncated to the 100k section bound when carried into the ticket.
   """
   position: ReadingPositionInput
+
+  """
+  BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the
+  server's for THIS call (their key pays it; no shared daily cap).
+  """
+  provider: ProviderOverrideInput
 
   """
   companion / plan_companion: the learner's question.
@@ -1640,6 +1652,12 @@ input GenerateFlashcardsInput {
   The attributed node's uuid (optional, AD-6).
   """
   nodeId: String
+
+  """
+  BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the
+  server's for THIS call (their key pays it; no shared daily cap).
+  """
+  provider: ProviderOverrideInput
 }
 
 """
@@ -1698,6 +1716,12 @@ input GenerateNoteInput {
   The plan scope's uuid (the scope must be "plan").
   """
   planId: String
+
+  """
+  BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the
+  server's for THIS call (their key pays it; no shared daily cap).
+  """
+  provider: ProviderOverrideInput
 
   """
   The note's scope: "plan" | "node" | "material" — exactly one scope id must ride with it.
@@ -1764,6 +1788,12 @@ input GenerateQuizInput {
   The plan scope's uuid (xor task_id, targeting.nodeId, material_id).
   """
   planId: String
+
+  """
+  BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the
+  server's for THIS call (their key pays it; no shared daily cap).
+  """
+  provider: ProviderOverrideInput
 
   """
   With material_id: narrows the Quick Test to 1–5 of the material's sections
@@ -1836,6 +1866,12 @@ input GenerateStudyFocusInput {
   material with no annotations is VALIDATION_FAILED (nothing to distill).
   """
   materialId: String!
+
+  """
+  BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the
+  server's for THIS call (their key pays it; no shared daily cap).
+  """
+  provider: ProviderOverrideInput
 }
 
 """
@@ -1881,6 +1917,12 @@ input GenerateTodaySuggestionInput {
   suggestion on, nothing spent).
   """
   planId: String!
+
+  """
+  BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the
+  server's for THIS call (their key pays it; no shared daily cap).
+  """
+  provider: ProviderOverrideInput
 }
 
 """
@@ -1916,6 +1958,12 @@ input GradeOpenAnswerInput {
   The reply language: "zh" | "en" (AD-16 — one parameter, one policy).
   """
   language: String!
+
+  """
+  BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the
+  server's for THIS call (their key pays it; no shared daily cap).
+  """
+  provider: ProviderOverrideInput
 
   """
   The open question's uuid (ownership-checked; its keywords and source section drive the grading).
@@ -2792,6 +2840,12 @@ input MapMaterialSectionsInput {
   The material's uuid (ownership-checked; must be parsed with sections and attached to a plan).
   """
   materialId: String!
+
+  """
+  BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the
+  server's for THIS call (their key pays it; no shared daily cap).
+  """
+  provider: ProviderOverrideInput
 }
 
 """
@@ -3945,6 +3999,12 @@ input ProposeLessonOutlineInput {
   itself (uniform NOT_FOUND for foreign/malformed ids).
   """
   materialId: String!
+
+  """
+  BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the
+  server's for THIS call (their key pays it; no shared daily cap).
+  """
+  provider: ProviderOverrideInput
 }
 
 """
@@ -4022,6 +4082,27 @@ input ProposedStageInput {
   The stage's nodes with their roadmap metadata, in proposal order (epic-16).
   """
   nodes: [ProposedNodeInput!]
+}
+
+"""
+BYOK (epic 39): the caller's own OpenAI-compatible provider — baseUrl, model and
+apiKey together; calls on it skip the server's shared provider and daily cap.
+"""
+input ProviderOverrideInput {
+  """
+  The caller's API key — pays their own calls; never logged or persisted (the stream ticket carries it ≤60s, single-use).
+  """
+  apiKey: String!
+
+  """
+  The provider's https:// base URL (the chat-completions API root, e.g. https://api.openai.com/v1).
+  """
+  baseUrl: String!
+
+  """
+  The model name the provider serves (e.g. gpt-4o-mini).
+  """
+  model: String!
 }
 
 type Query {

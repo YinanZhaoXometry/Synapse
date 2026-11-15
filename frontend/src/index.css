@@ -439,6 +439,34 @@
     backdrop-filter: blur(20px) saturate(180%);
     border-color: var(--glass-edge);
   }
+  /* Desktop shell (epic 39 T1): macOS runs a hidden native title bar and the
+     app's own chrome is the drag surface — interactive descendants opt out.
+     No-ops on the web (the classes are only applied inside the shell). */
+  .desktop-drag-region {
+    -webkit-app-region: drag;
+  }
+  .desktop-drag-region button,
+  .desktop-drag-region a,
+  .desktop-drag-region input,
+  .desktop-drag-region select,
+  .desktop-drag-region textarea,
+  .desktop-drag-region [role="button"] {
+    -webkit-app-region: no-drag;
+  }
+  .desktop-no-drag {
+    -webkit-app-region: no-drag;
+  }
+  /* Immersive reading has no sidebar — a transparent top strip keeps the
+     window movable without stealing clicks (drag only). */
+  .desktop-drag-strip {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 24px;
+    z-index: 5;
+    -webkit-app-region: drag;
+  }
   .glass-bottom-nav {
     background: var(--glass-bar);
     -webkit-backdrop-filter: blur(20px) saturate(180%);

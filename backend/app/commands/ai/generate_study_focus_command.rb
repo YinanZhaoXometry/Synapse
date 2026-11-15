@@ -44,6 +44,7 @@ module Ai
     option :current_user
     option :client_uuid
     option :language
+    option :provider_override, optional: true
     option :material_id
 
     def call
@@ -66,7 +67,7 @@ module Ai
       return annotation_gate_failure if annotations.empty?
 
       context = Ai::ContextAssembler.annotation_scope(material, annotations)
-      provider = Ai::Provider.complete(user: current_user,
+      provider = Ai::Provider.complete(user: current_user, override: provider_override,
                                        messages: Ai::Prompts.study_focus(language: language, context: context))
       return provider if provider.failure?
 

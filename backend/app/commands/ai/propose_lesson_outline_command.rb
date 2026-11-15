@@ -31,6 +31,7 @@ module Ai
     option :current_user
     option :material_id
     option :language
+    option :provider_override, optional: true
 
     def call
       return Failure(:VALIDATION_FAILED, { message: "language is invalid", field: :language }) unless Ai::LANGUAGES.include?(language.to_s)
@@ -38,7 +39,7 @@ module Ai
       material = resolve_material
       return material if material.failure?
 
-      provider = Ai::Provider.complete(user: current_user,
+      provider = Ai::Provider.complete(user: current_user, override: provider_override,
                                        messages: Ai::Prompts.lesson_outline(
                                          language: language,
                                          context: Ai::ContextAssembler.material_scope(material.value!),

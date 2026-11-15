@@ -32,16 +32,21 @@ module Mutations
                required: true,
                description: "The plan to suggest for. Unknown, foreign, or malformed ids are NOT_FOUND; a plan with no non-mastered mapped node is INTERNAL (nothing to base a suggestion on, nothing spent)."
 
+      argument :provider, Types::Ai::ProviderOverrideInput,
+               required: false,
+               description: "BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the server's for THIS call (their key pays it; no shared daily cap)."
+
       field :today_suggestion, Types::AiTodaySuggestionType,
             null: false,
             description: "The created (or replayed) suggestion."
 
-      def resolve(client_uuid:, language:, plan_id:)
+      def resolve(client_uuid:, language:, plan_id:, provider: nil)
         command_result(::Ai::GenerateTodaySuggestionCommand.call(
           current_user: current_user!,
           client_uuid: client_uuid,
           language: language,
-          plan_id: plan_id
+          plan_id: plan_id,
+          provider_override: provider&.to_h
         ))
       end
     end

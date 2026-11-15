@@ -45,6 +45,10 @@ module Mutations
                required: false,
                description: "With material_id: the Quick Test's question count, 3–5 (default 5). The real count may land lower honestly — questions citing unmapped sections drop."
 
+      argument :provider, Types::Ai::ProviderOverrideInput,
+               required: false,
+               description: "BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the server's for THIS call (their key pays it; no shared daily cap)."
+
       field :session, Types::QuizSessionType,
             null: false,
             description: "The created (or replayed) session."
@@ -53,7 +57,7 @@ module Mutations
             description: "The session's questions in generation order."
 
       def resolve(client_uuid:, mode:, language:, plan_id: nil, task_id: nil, targeting: nil,
-                  material_id: nil, section_ids: nil, target_count: nil)
+                  material_id: nil, section_ids: nil, target_count: nil, provider: nil)
         command_result(::Ai::GenerateQuizCommand.call(
           current_user: current_user!,
           client_uuid: client_uuid,
@@ -64,7 +68,8 @@ module Mutations
           targeting: targeting&.to_h,
           material_id: material_id,
           section_ids: section_ids,
-          target_count: target_count
+          target_count: target_count,
+          provider_override: provider&.to_h
         ))
       end
     end

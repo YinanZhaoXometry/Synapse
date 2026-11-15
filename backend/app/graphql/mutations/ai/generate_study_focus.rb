@@ -28,16 +28,21 @@ module Mutations
                required: true,
                description: "The material to distill. Unknown, foreign, or malformed ids are NOT_FOUND; a material with no annotations is VALIDATION_FAILED (nothing to distill)."
 
+      argument :provider, Types::Ai::ProviderOverrideInput,
+               required: false,
+               description: "BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the server's for THIS call (their key pays it; no shared daily cap)."
+
       field :study_focus_set, Types::StudyFocusSetType,
             null: false,
             description: "The created (or replayed) active set."
 
-      def resolve(client_uuid:, language:, material_id:)
+      def resolve(client_uuid:, language:, material_id:, provider: nil)
         command_result(::Ai::GenerateStudyFocusCommand.call(
           current_user: current_user!,
           client_uuid: client_uuid,
           language: language,
-          material_id: material_id
+          material_id: material_id,
+          provider_override: provider&.to_h
         ))
       end
     end

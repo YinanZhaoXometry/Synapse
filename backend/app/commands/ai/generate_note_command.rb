@@ -58,6 +58,7 @@ module Ai
     option :client_uuid
     option :scope
     option :language
+    option :provider_override, optional: true
     option :plan_id, optional: true
     option :node_id, optional: true
     option :material_id, optional: true
@@ -84,7 +85,7 @@ module Ai
 
       coverage = weak_spot_coverage(resolved.value!)
       context = build_context(resolved.value!)
-      provider = Ai::Provider.complete(user: current_user,
+      provider = Ai::Provider.complete(user: current_user, override: provider_override,
                                        messages: build_messages(context, coverage))
       return provider if provider.failure?
 

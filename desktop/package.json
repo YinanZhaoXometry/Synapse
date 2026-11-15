@@ -1,7 +1,7 @@
 {
   "name": "synapse-desktop",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Synapse desktop shell (epic 38) — the Vite SPA packaged by Electron against the deployed api. The SPA itself is NOT a source of this package: frontend/ builds it, the build stages it into desktop/dist, electron-builder packs main.cjs + dist.",
   "main": "main.cjs",
   "scripts": {

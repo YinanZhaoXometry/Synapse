@@ -428,4 +428,61 @@ RSpec.describe "GraphQL server-side AI mutations (epic P2-5 ticket 03)", type: :
       expect(user.ai_usage_counters).to be_empty
     end
   end
+
+  # BYOK (epic 39 T2): the provider override crosses the REAL GraphQL
+  # boundary (graphql-ruby to_h keys are ruby-underscored — pinned here so
+  # the camelCase coercion bug never returns), routes through the caller's
+  # endpoint, and never consumes the shared cap.
+  describe "BYOK provider override (epic 39)" do
+    let(:override_client) { double("override client") }
+
+    before do
+      allow(Ai::Provider).to receive(:override_adapter).and_return(override_client)
+      allow(adapter).to receive(:complete) # the shared adapter must stay UNTOUCHED — stub so the negative assertion is spyable
+    end
+
+    it "routes a provider-overridden generateQuiz through the caller's endpoint, uncapped" do
+      user, token = user_with_token("ai-byok@example.com")
+      plan = create(:study_plan, user: user)
+      node = create(:knowledge_node, user: user, plan: plan)
+      material = create(:material, user: user, plan: plan, sections: [
+        { "id" => "sec-1", "title" => "S", "text" => "body" }
+      ])
+      allow(override_client).to receive(:complete).and_return({ questions: [
+        { nodeId: node.id, kind: "choice", prompt: "Q?", options: %w[a b], correctOptionIndex: 1,
+          sourceMaterialId: material.id, sourceSectionId: "sec-1", keywords: [ "k" ], explanation: "E" }
+      ] }.to_json)
+
+      query = <<~GRAPHQL
+        mutation GenerateQuiz($input: GenerateQuizInput!) {
+          generateQuiz(input: $input) { session { id } questions { id } }
+        }
+      GRAPHQL
+      result = graphql(query, variables: {
+        input: { clientUuid: SecureRandom.uuid, mode: "choice", language: "en", planId: plan.id,
+                 provider: { baseUrl: "https://api.example.com/v1", model: "m", apiKey: "k" } }
+      }, token: token)
+      payload = result.dig("data", "generateQuiz")
+      expect(payload["session"]).to be_present
+      expect(override_client).to have_received(:complete).once
+      expect(adapter).not_to have_received(:complete)
+      expect(user.ai_usage_counters.count).to eq(0)
+    end
+
+    it "refuses a blank-string override field with VALIDATION_FAILED (schema-required fields may still arrive blank)" do
+      user, token = user_with_token("ai-byok-blank@example.com")
+      plan = create(:study_plan, user: user)
+
+      query = <<~GRAPHQL
+        mutation GenerateQuiz($input: GenerateQuizInput!) {
+          generateQuiz(input: $input) { session { id } }
+        }
+      GRAPHQL
+      result = graphql(query, variables: {
+        input: { clientUuid: SecureRandom.uuid, mode: "open", language: "zh", planId: plan.id,
+                 provider: { baseUrl: "https://api.example.com/v1", model: "m", apiKey: "  " } }
+      }, token: token)
+      expect(error_code(result)).to eq("VALIDATION_FAILED")
+    end
+  end
 end

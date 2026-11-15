@@ -25,6 +25,8 @@ import { apiErrorCode } from "@/api";
 import { clearToken, logout, resetApiClient, sessionExitUrl } from "@/apollo";
 import { THEMES, type ThemeId, type ThemeMode } from "@/lib/themes";
 import { useReaderMdTheme } from "@/lib/reader-md-theme";
+import { getModelConfig, isCompleteProviderConfig, useModelConfig, type ModelConfig } from "@/lib/model-config";
+import { isDesktopShell } from "@/lib/desktop";
 import { cn } from "@/lib/utils";
 import { useSessionIdentity } from "@/components/shared/session-identity";
 
@@ -119,6 +121,72 @@ const NEUTRAL_BTN =
   "shrink-0 rounded-[10px] bg-card px-3 py-[7px] text-xs font-semibold shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)] transition-colors " +
   "hover:bg-[var(--glass-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] " +
   "cursor-pointer disabled:opacity-55 disabled:cursor-wait";
+
+/** The desktop shell's model provider (epic 39 T2, BYOK): base URL, model
+ * name, API key for the caller's own OpenAI-compatible endpoint. Stored
+ * LOCALLY (lib/model-config.ts); injected into every AI-invoking mutation by
+ * the apollo link seam — the next AI call is the live test. An incomplete
+ * config never rides the wire (the link skips it), so saving a draft is
+ * always safe. */
+function ModelProviderRow() {
+  const { t } = useLanguage();
+  const [, persistConfig] = useModelConfig();
+  const [draft, setDraft] = useState<ModelConfig>(() => getModelConfig());
+
+  const save = () => {
+    persistConfig(draft);
+    toast.success(t("settings.providerSaved"));
+  };
+
+  const field = (
+    labelKey: string,
+    helpKey: string,
+    value: string,
+    onChange: (next: string) => void,
+    testId: string,
+    type: "text" | "password" = "text",
+    placeholder?: string,
+  ) => (
+    <div className="setting-row" key={labelKey}>
+      <div className="flex-1 min-w-0">
+        <div className="setting-label">{t(labelKey)}</div>
+        <div className="setting-help mt-0.5">{t(helpKey)}</div>
+      </div>
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        autoComplete="off"
+        spellCheck={false}
+        onChange={(event) => onChange(event.target.value)}
+        className={cn(ACCOUNT_INPUT, "font-mono")}
+        data-testid={testId}
+      />
+    </div>
+  );
+
+  return (
+    <>
+      {field("settings.providerBaseUrl", "settings.providerBaseUrlHelp", draft.baseUrl,
+        (next) => setDraft({ ...draft, baseUrl: next }), "model-baseUrl", "text", "https://api.example.com/v1")}
+      {field("settings.providerModel", "settings.providerModelHelp", draft.modelName,
+        (next) => setDraft({ ...draft, modelName: next }), "model-modelName", "text", "gpt-4o-mini")}
+      {field("settings.providerApiKey", "settings.providerApiKeyHelp", draft.apiKey,
+        (next) => setDraft({ ...draft, apiKey: next }), "model-apiKey", "password")}
+      <div className="setting-row">
+        <div className="flex-1 min-w-0">
+          <div className="setting-label">{t("settings.providerActive")}</div>
+          <div className="setting-help mt-0.5">
+            {isCompleteProviderConfig(draft) ? t("settings.providerActiveOn") : t("settings.providerActiveOff")}
+          </div>
+        </div>
+        <button type="button" className={NEUTRAL_BTN} onClick={save}>
+          {t("settings.providerSave")}
+        </button>
+      </div>
+    </>
+  );
+}
 
 /** The password form (AD-15, delta decision 2): verify-old → bcrypt-new are
  * the server's rules; the client validates the NEW password (register
@@ -455,6 +523,18 @@ export default function SettingsPage() {
         <p className="group-note">{t("settings.studyGoalHelp")}</p>
         {goalQuery.data && <StudyGoalRow target={goalQuery.data.target} />}
       </section>
+
+      {/* Desktop shell only (epic 39 T2, BYOK): the caller's own
+          OpenAI-compatible model — base URL, model name, API key — stored
+          locally and injected into every AI call by the apollo link seam.
+          Hidden on the web build (the server's shared provider serves it). */}
+      {isDesktopShell && (
+        <section className="settings-group" data-testid="model-provider-group">
+          <h2>{t("settings.provider")}</h2>
+          <p className="group-note">{t("settings.providerNote")}</p>
+          <ModelProviderRow />
+        </section>
+      )}
 
       {/* Group 3.5 — the account half (FR-30 + FR-34's display consequence,
           epic-14 T1): password change, whole-document export, honest AI

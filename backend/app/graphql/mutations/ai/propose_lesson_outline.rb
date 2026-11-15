@@ -20,6 +20,10 @@ module Mutations
                required: true,
                description: "The reply language: \"zh\" | \"en\" (AD-16 — one parameter, one policy)."
 
+      argument :provider, Types::Ai::ProviderOverrideInput,
+               required: false,
+               description: "BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the server's for THIS call (their key pays it; no shared daily cap)."
+
       field :outline, [ Types::LessonOutlineChapterType ],
             null: false,
             description: "The proposed chapters (title + sourceSectionIds) — at most the material template cap (8)."
@@ -28,11 +32,12 @@ module Mutations
             null: false,
             description: "The exact expected call count for THIS outline (1 + chapters, from the template constants) — the confirm page shares the lessonEstimate query's source of truth."
 
-      def resolve(material_id:, language:)
+      def resolve(material_id:, language:, provider: nil)
         result = command_result(::Ai::ProposeLessonOutlineCommand.call(
           current_user: current_user!,
           material_id: material_id,
-          language: language
+          language: language,
+          provider_override: provider&.to_h
         ))
         { outline: result[:outline], estimated_calls: result[:estimated_calls] }
       end

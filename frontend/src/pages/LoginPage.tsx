@@ -10,6 +10,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Sparkles } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { isMacDesktopShell } from "@/lib/desktop";
 import { useLoginMutation } from "@/api";
 import { getToken, setToken } from "@/apollo";
 import { AuthShell, authErrorKey, useAuthReturnDestination, useSessionExitNotice, type AuthFieldErrors } from "./auth-shell";
@@ -71,7 +72,12 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthShell
+    // The pre-login wall renders outside AppLayout (no sidebar = no drag
+    // region): the desktop shell keeps a transparent top strip so the
+    // frameless window stays movable here too (epic 39 T1).
+    <>
+      {isMacDesktopShell && <div className="desktop-drag-strip" aria-hidden="true" />}
+      <AuthShell
       eyebrowKey="auth.eyebrow"
       titleKey="auth.loginTitle"
       submitLabelKey="auth.loginSubmit"
@@ -93,6 +99,7 @@ export default function LoginPage() {
         {loggingIn ? t("auth.submitting") : t("auth.demoEntry")}
       </button>
     </AuthShell>
+    </>
   );
 }
 

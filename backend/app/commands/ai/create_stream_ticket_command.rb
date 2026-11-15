@@ -31,6 +31,7 @@ module Ai
     option :current_user
     option :op
     option :language
+    option :provider_override, optional: true
     option :material_id, optional: true
     option :question, optional: true
     option :position, optional: true
@@ -70,6 +71,18 @@ module Ai
       end
       return payload if payload.failure?
 
+      # BYOK (epic 39 T2): a validated provider override rides the ticket
+      # payload jsonb — the redeem side hands it to Provider.stream so the
+      # caller's own endpoint pays the streamed call. Validated AT MINT so a
+      # bad config fails the mutation loudly, not the SSE stream.
+      payload = payload.value!
+      if provider_override
+        coerced = Ai::ProviderOverride.coerce(provider_override)
+        return coerced if coerced.failure?
+
+        payload["provider"] = coerced.value!.to_payload
+      end
+
       if current_user.stream_tickets.where(consumed_at: nil).where(expires_at: Time.current..).count >= MAX_LIVE_TICKETS
         return Failure(:RATE_LIMITED, { message: "too many live stream tickets" })
       end
@@ -77,7 +90,7 @@ module Ai
       ticket = current_user.stream_tickets.create!(
         op: op,
         token: SecureRandom.urlsafe_base64(32),
-        payload: payload.value!,
+        payload: payload,
         expires_at: Ai.stream_ticket_ttl_seconds.seconds.from_now
       )
       Success(ticket: ticket)

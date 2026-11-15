@@ -1210,7 +1210,7 @@ export default function ReaderPage() {
           type="button"
           onClick={() => setImmersive(false)}
           aria-label={t("reader.immersiveOffAria")}
-          className="fixed top-3 right-3 z-20 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[var(--glass-5)] border border-border-soft shadow-raised text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+          className="desktop-no-drag fixed top-3 right-3 z-20 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[var(--glass-5)] border border-border-soft shadow-raised text-xs text-muted-foreground hover:text-foreground cursor-pointer"
         >
           <Minimize2 className="w-3.5 h-3.5" aria-hidden="true" />
         </button>

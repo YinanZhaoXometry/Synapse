@@ -53,6 +53,7 @@ module Ai
     option :current_user
     option :client_uuid
     option :language
+    option :provider_override, optional: true
     option :plan_id
 
     def call
@@ -79,7 +80,7 @@ module Ai
       candidates = usable_candidates(plan, now)
       return internal_no_target_failure if candidates.empty?
 
-      provider = Ai::Provider.complete(user: current_user,
+      provider = Ai::Provider.complete(user: current_user, override: provider_override,
                                        messages: Ai::Prompts.today_suggestion(language: language, candidates: candidates))
       return provider if provider.failure?
 
