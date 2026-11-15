@@ -256,6 +256,10 @@ export const translations = {
       'reader.pageAria': '第 {n} 页',
       'reader.prevPageAria': '上一页',
       'reader.nextPageAria': '下一页',
+      // PDF 缩放（owner bug round 2026-11-15）：fit-width 不再是唯一尺寸
+      'reader.zoomInAria': '放大 PDF',
+      'reader.zoomOutAria': '缩小 PDF',
+      'reader.zoomResetAria': '重置为适配宽度',
       'reader.panelCollapseAria': '收起面板',
       'reader.panelExpandAria': '展开面板',
       'reader.immersiveOnAria': '进入沉浸模式',
@@ -1342,6 +1346,10 @@ export const translations = {
       'reader.pageAria': 'Page {n}',
       'reader.prevPageAria': 'Previous page',
       'reader.nextPageAria': 'Next page',
+      // PDF zoom (owner bug round 2026-11-15): fit-width is no longer the only size
+      'reader.zoomInAria': 'Zoom the PDF in',
+      'reader.zoomOutAria': 'Zoom the PDF out',
+      'reader.zoomResetAria': 'Reset to fit-width',
       'reader.panelCollapseAria': 'Collapse panel',
       'reader.panelExpandAria': 'Expand panel',
       'reader.immersiveOnAria': 'Enter immersive mode',

@@ -49,6 +49,8 @@ import {
   PanelRightOpen,
   RotateCw,
   Upload,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -704,6 +706,16 @@ export default function ReaderPage() {
   }
 
   const pagerVisible = totalPages !== null;
+  // PDF zoom (owner bug round 2026-11-15): fit-width is no longer the only
+  // size — a discrete ladder over fit-width, stepped by the top-bar controls
+  // and rendered by PdfPageFlow through the width seam. 1 = fit-width.
+  const [pdfZoom, setPdfZoom] = useState(1);
+  const PDF_ZOOM_MIN = 0.5;
+  const PDF_ZOOM_MAX = 3;
+  const zoomIn = () =>
+    setPdfZoom((z) => Math.min(PDF_ZOOM_MAX, Math.round((z + 0.25) * 100) / 100));
+  const zoomOut = () =>
+    setPdfZoom((z) => Math.max(PDF_ZOOM_MIN, Math.round((z - 0.25) * 100) / 100));
   // Source-aware back (2026-11-06): the reader has 8+ inbound origins (materials
   // hub, mistakes citations, tutor citations, task/plan homes) — a hub/task
   // origin returns there instead of the hardcoded plan spine (the plan origin
@@ -779,6 +791,39 @@ export default function ReaderPage() {
                   className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-[var(--glass-2)] disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
                 >
                   <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+                <span className="w-px h-4 bg-border" aria-hidden="true" />
+                {/* Zoom (owner bug round 2026-11-15): − / percent / + with the
+                    percent click resetting to fit-width. The flow restores
+                    the relative scroll position across the reflow. */}
+                <button
+                  type="button"
+                  onClick={zoomOut}
+                  aria-label={t("reader.zoomOutAria")}
+                  disabled={pdfZoom <= PDF_ZOOM_MIN}
+                  data-testid="pdf-zoom-out"
+                  className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-[var(--glass-2)] disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPdfZoom(1)}
+                  aria-label={t("reader.zoomResetAria")}
+                  data-testid="pdf-zoom-reset"
+                  className="font-display font-semibold tabular-nums text-[13px] px-1 min-w-[44px] text-center rounded-md hover:text-foreground hover:bg-[var(--glass-2)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {Math.round(pdfZoom * 100)}%
+                </button>
+                <button
+                  type="button"
+                  onClick={zoomIn}
+                  aria-label={t("reader.zoomInAria")}
+                  disabled={pdfZoom >= PDF_ZOOM_MAX}
+                  data-testid="pdf-zoom-in"
+                  className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-[var(--glass-2)] disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" aria-hidden="true" />
                 </button>
                 <span className="w-px h-4 bg-border" aria-hidden="true" />
               </>
@@ -905,6 +950,7 @@ export default function ReaderPage() {
               <PdfPageFlow
                 ref={flowRef}
                 blob={sessionBlobs.get(material.id)}
+                zoom={pdfZoom}
                 initialPage={anchor.page ?? storedPdfPage}
                 flashTarget={anchor.highlight}
                 onPageChange={handlePageChange}

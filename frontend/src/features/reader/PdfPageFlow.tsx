@@ -94,10 +94,28 @@ interface PdfPageFlowProps {
   onToggleClaim?(sectionId: string): void;
   onConfirmQuiz?(sectionId: string): void;
   quickTestGate?: QuickTestGateState;
+  /**
+   * Zoom multiplier over fit-width (owner bug round 2026-11-15): 1 is the
+   * fit-width page the flow has always rendered; >1 enlarges (horizontal
+   * scroll), <1 shrinks. The mounter owns the state + top-bar controls —
+   * the flow only renders at the given width: every render seam below
+   * (canvas, text layer, annotations, position rects) keys off the page
+   * width and follows automatically.
+   */
+  zoom?: number;
+}
+
+/** The reading column's max outer width (max-w-[980px] in the markup — the
+ * two must move together). */
+const PAGE_COLUMN_MAX_W = 980;
+
+/** The zoomed page width: fit-width × multiplier, floored. Pure for tests. */
+export function zoomedPageWidth(columnWidth: number, zoom: number): number {
+  return Math.floor(columnWidth * zoom);
 }
 
 export const PdfPageFlow = forwardRef<PdfFlowHandle, PdfPageFlowProps>(function PdfPageFlow(
-  { blob, initialPage, flashTarget, onPageChange, onTotalPages, annotations, onAnnotationsApplied, onRemoveAnnotation, claimedSectionIds, onToggleClaim, onConfirmQuiz, quickTestGate = "ready" },
+  { blob, initialPage, flashTarget, onPageChange, onTotalPages, annotations, onAnnotationsApplied, onRemoveAnnotation, claimedSectionIds, onToggleClaim, onConfirmQuiz, quickTestGate = "ready", zoom = 1 },
   ref,
 ) {
   const { t } = useLanguage();
@@ -106,6 +124,12 @@ export const PdfPageFlow = forwardRef<PdfFlowHandle, PdfPageFlowProps>(function 
   const [columnWidth, setColumnWidth] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(() => (initialPage ? Math.max(1, Math.floor(initialPage)) : 1));
   const [flashPage, setFlashPage] = useState<number | null>(null);
+  // The zoom reflow restore's baseline (kept current by the scroll handler).
+  const zoomRatioRef = useRef(0);
+  const prevZoomRef = useRef<number | null>(null);
+  // The column's horizontal padding at measure time — the zoom inline width
+  // is OUTER (Tailwind's border-box: content + padding).
+  const columnPadRef = useRef(0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const columnRef = useRef<HTMLDivElement>(null);
@@ -142,15 +166,29 @@ export const PdfPageFlow = forwardRef<PdfFlowHandle, PdfPageFlowProps>(function 
   }, [blob, onTotalPages]);
 
   // Reading-column width (fit-width pages): measured, so page containers get
-  // exact sizes before any canvas renders.
+  // exact sizes before any canvas renders. The SCROLL container is the one
+  // observed (owner bug round 2026-11-15 zoom work): the column itself now
+  // carries the zoom inline width, so observing it would feed the zoomed
+  // width back into the fit-width baseline (an infinite loop). The column's
+  // own horizontal padding is subtracted by hand (computed style — jsdom has
+  // no stylesheet, tests see pad 0).
   useEffect(() => {
-    const column = columnRef.current;
-    if (!column) return;
+    const root = scrollRef.current;
+    if (!root) return;
+    const horizontalPad = (el: HTMLElement | null): number => {
+      if (!el) return 0;
+      const style = window.getComputedStyle(el);
+      return (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+    };
     const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width;
-      if (width && width > 0) setColumnWidth(Math.floor(width));
+      const inner = entries[0]?.contentRect.width;
+      if (inner && inner > 0) {
+        const pad = horizontalPad(columnRef.current);
+        columnPadRef.current = pad;
+        setColumnWidth(Math.floor(Math.min(inner, PAGE_COLUMN_MAX_W) - pad));
+      }
     });
-    observer.observe(column);
+    observer.observe(root);
     return () => observer.disconnect();
   }, []);
 
@@ -189,6 +227,10 @@ export const PdfPageFlow = forwardRef<PdfFlowHandle, PdfPageFlowProps>(function 
       raf = window.requestAnimationFrame(() => {
         raf = 0;
         updateCurrentFromViewport();
+        // The zoom reflow's restore ratio (below): the reader's relative
+        // position, kept current on every scroll so a zoom change can put
+        // them back where they were — proportionally, not absolutely.
+        if (root.scrollHeight > 0) zoomRatioRef.current = root.scrollTop / root.scrollHeight;
       });
     };
     root.addEventListener("scroll", onScroll, { passive: true });
@@ -205,6 +247,19 @@ export const PdfPageFlow = forwardRef<PdfFlowHandle, PdfPageFlowProps>(function 
     },
     [],
   );
+
+  // Zoom reflow restore (owner bug round 2026-11-15): a size change reflows
+  // the whole flow and the absolute scrollTop lands wherever the clamping
+  // leaves it — put the reader back at the same RELATIVE position instead.
+  // Post-commit by the time this runs (the containers size inline), so the
+  // assignment lands directly; the mount run just arms the baseline.
+  useEffect(() => {
+    const root = scrollRef.current;
+    const prev = prevZoomRef.current;
+    prevZoomRef.current = zoom;
+    if (!root || prev === null || prev === zoom || columnWidth === null) return;
+    root.scrollTop = zoomRatioRef.current * root.scrollHeight;
+  }, [zoom, columnWidth]);
 
   const scrollToPage = useCallback(
     (page: number, flash = false) => {
@@ -313,14 +368,31 @@ export const PdfPageFlow = forwardRef<PdfFlowHandle, PdfPageFlowProps>(function 
     // index.css beats an ancestor's none), so a drag can only ever anchor on
     // real text — the pdf.js viewer's container-side half of the contract
     // the .pdf-text-layer port had left out.
-    <div ref={scrollRef} className="relative flex-1 min-h-0 overflow-y-auto select-none bg-secondary/50">
-      <div ref={columnRef} className="mx-auto w-full max-w-[980px] px-4 md:px-8 py-6 md:py-8 flex flex-col gap-6 select-none">
+    <div ref={scrollRef} className="relative flex-1 min-h-0 overflow-y-auto overflow-x-auto select-none bg-secondary/50">
+      {/* The column carries the zoom inline (owner bug round 2026-11-15):
+          outer width = zoomed content + padding, so pages fit it exactly and
+          the overflow runs RIGHT only (auto margins would center the wider
+          column and strand its left half — unreachable overflow). zoom 1 is
+          the classic fit-width column, untouched. */}
+      <div
+        ref={columnRef}
+        className={cn(
+          "flex flex-col gap-6 px-4 md:px-8 py-6 md:py-8 select-none",
+          zoom <= 1 && "mx-auto",
+          zoom === 1 && "w-full max-w-[980px]",
+        )}
+        style={
+          columnWidth !== null && zoom !== 1
+            ? { width: Math.ceil(columnWidth * zoom) + columnPadRef.current }
+            : undefined
+        }
+      >
         {!doc || columnWidth === null
           ? null
           : Array.from({ length: doc.numPages }, (_, i) => i + 1).map((n) => {
               const base = doc.pageSize(n);
               if (!base) return null;
-              const width = columnWidth;
+              const width = zoomedPageWidth(columnWidth, zoom);
               const height = Math.floor((base.height / base.width) * width);
               return (
                 <PdfPageCanvas
