@@ -353,6 +353,9 @@ html.lp-active {
   min-height: 34px;
   padding: 6px 13px;
   font-size: 13px;
+  /* the reference download pill: dark keyline ring + a soft white halo */
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5), 0 0 14px 0 rgba(255, 255, 255, 0.19);
 }
 .lp-header-actions .lp-btn-sm .lp-icon {
   --lp-icon-size: 15px;
@@ -477,21 +480,24 @@ html.lp-active {
   padding-top: var(--lp-space-4);
   pointer-events: none;
 }
+/* round 8 — the navbar glass is measured straight off raycast.com: a fully
+ * transparent blur(5px) pane whose life comes from what scrolls beneath it
+ * (our hero canvas plays the ray's role), hairline border, top inner gleam */
 .lp-header-inner {
   position: relative;
   display: flex;
   width: calc(100% - 32px);
-  max-width: 1180px;
-  min-height: 64px;
+  max-width: 1204px;
+  min-height: 72px;
   align-items: center;
   justify-content: space-between;
   gap: var(--lp-space-5);
   padding-inline: var(--lp-space-4);
-  border: 1px solid var(--lp-border-soft);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--lp-radius-lg);
-  background: var(--lp-header-bg);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.045);
-  backdrop-filter: blur(24px) saturate(150%);
+  background: transparent;
+  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(5px);
   pointer-events: auto;
 }
 .lp-brand {
@@ -604,8 +610,22 @@ html.lp-active {
 .lp-hero-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 64px;
-  padding-block: 176px 96px;
+  gap: 72px;
+  /* round 8: the hero breathes like the reference — near-viewport tall */
+  padding-block: 216px 128px;
+}
+/* the raycast-style beam field behind the hero copy */
+.lp-hero-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.lp-hero .lp-container {
+  position: relative;
+  z-index: 1;
 }
 .lp-hero-copy {
   max-width: 860px;
@@ -941,7 +961,11 @@ html.lp-active {
 
 .lp-capabilities {
   border-block: 1px solid var(--lp-border-soft);
-  background: #0a0b0d;
+  /* the bloom sits on the intro title — the gradient's center IS the headline
+   * (owner round 8), one lamp over the sticky column */
+  background:
+    radial-gradient(ellipse 620px 460px at 21% 180px, rgba(255, 99, 99, 0.1), transparent 66%),
+    #0a0b0d;
 }
 .lp-capabilities-layout {
   display: grid;
@@ -1845,7 +1869,7 @@ html.lp-active {
     display: inline-flex;
   }
   .lp-hero-grid {
-    padding-block: 160px 80px;
+    padding-block: 184px 104px;
   }
   .lp-hero-copy {
     max-width: 720px;
@@ -1992,7 +2016,7 @@ html.lp-active {
   }
   .lp-hero-grid {
     gap: 48px;
-    padding-block: 136px 64px;
+    padding-block: 152px 88px;
   }
   .lp-hero-title {
     margin-top: var(--lp-space-5);

@@ -1116,3 +1116,14 @@ svg.lucide {
 .dark .reader-claudette .reader-prose mark:not([data-annotation-id]) { background: rgba(227, 192, 123, 0.32); }
 /* Task-list checkboxes in clay. */
 .reader-claudette .reader-prose input[type="checkbox"] { accent-color: var(--cl-clay-2); }
+
+/* Boot anti-flash for the landing (index.html sets the class pre-paint):
+ * outside any @layer so it outranks the themed body canvas; LandingPage
+ * removes the class on unmount, handing the warm canvas back to the app. */
+html.lp-boot-dark {
+  background-color: #07080a;
+}
+html.lp-boot-dark body {
+  background-color: #07080a;
+  background-image: none;
+}

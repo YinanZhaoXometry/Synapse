@@ -270,3 +270,18 @@ describe("LandingPage — round 7 polish", () => {
     expect(document.querySelector(".lp-knowledge-map")).toHaveAttribute("data-lang", "zh");
   });
 });
+
+describe("LandingPage — round 8 (raycast glass + hero canvas)", () => {
+  it("mounts the hero beam-field canvas behind the copy", async () => {
+    renderLanding();
+    await screen.findByText(zh["landing.hero.lead"]);
+    const canvas = document.querySelector(".lp-hero-canvas");
+    expect(canvas).toBeTruthy();
+    expect(canvas).toHaveAttribute("aria-hidden", "true");
+    // the canvas is the hero's first child — the copy renders after it (and
+    // rides above via the stylesheet, which jsdom does not load)
+    const hero = document.querySelector(".lp-hero")!;
+    expect(hero.firstElementChild).toBe(canvas);
+    expect(hero.contains(document.querySelector(".lp-hero-copy")!)).toBe(true);
+  });
+});

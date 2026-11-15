@@ -18,6 +18,18 @@
     <meta name="twitter:title" content="Synapse — AI 学习伙伴" />
     <meta name="twitter:description" content="AI-guided learning platform: read with a companion that knows the page you're on. 每一次提问，都在强化一条连接。" />
     <meta name="twitter:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/31bc1b79-a377-4c28-8e13-ab548fa47293/id-preview-185cb253--1fa55096-378b-4e16-84b5-c783d8eaf223.lovable.app-1774147536221.png" />
+
+    <script>
+      // Anti-flash boot: the landing's dark canvas must own the first paint on
+      // `/` for logged-out visitors — the app's warm sunset body would flash
+      // first otherwise (owner round 8). LandingPage lifts the class on
+      // unmount, so the warm canvas resumes across the rest of the app.
+      try {
+        if (location.pathname === "/" && !localStorage.getItem("synapse-token")) {
+          document.documentElement.classList.add("lp-boot-dark");
+        }
+      } catch (e) {}
+    </script>
 </head>
 
   <body>
