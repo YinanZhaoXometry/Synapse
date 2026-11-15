@@ -210,10 +210,10 @@ function OrganizePanel({ hidden }: { hidden: boolean }) {
               {t("landing.preview.organize.r.core2")}
             </text>
             <circle cx="32" cy="26" r="24" fill="var(--lp-surface)" stroke="var(--lp-border)" />
-            <circle cx="147" cy="25" r="21" fill="var(--lp-surface)" stroke="var(--lp-border)" />
-            <circle cx="36" cy="127" r="19" fill="var(--lp-surface)" stroke="var(--lp-border-soft)" />
-            <circle cx="145" cy="126" r="20" fill="var(--lp-surface)" stroke="var(--lp-border-soft)" />
-            <g fontSize="10" textAnchor="middle">
+            <circle cx="147" cy="25" r="22" fill="var(--lp-surface)" stroke="var(--lp-border)" />
+            <circle cx="36" cy="127" r="21" fill="var(--lp-surface)" stroke="var(--lp-border-soft)" />
+            <circle cx="145" cy="126" r="21" fill="var(--lp-surface)" stroke="var(--lp-border-soft)" />
+            <g fontSize="9.5" textAnchor="middle">
               <text x="32" y="30" fill="var(--lp-fg-2)">{t("landing.preview.organize.r.encode")}</text>
               <text x="147" y="29" fill="var(--lp-fg-2)">{t("landing.preview.organize.r.retrieve")}</text>
               <text x="36" y="131" fill="var(--lp-text-subtle)">{t("landing.preview.organize.r.forget")}</text>
