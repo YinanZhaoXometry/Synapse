@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CalendarDays, Compass, History, Inbox, Layers, MessageCircle, Network, PenLine, Share2, Target, TrendingUp } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ArrowRightIcon } from "./landing-icons";
+import { LANDING_REPO_URL } from "./LandingHeader";
 
 /** The demo tab ids the preview panel and the capability "查看演示" links share. */
 export type DemoTabId = "organize" | "plan" | "ask" | "review";
@@ -82,6 +83,12 @@ export function LandingCapabilities({ onSelectDemo }: { onSelectDemo: (tab: Demo
             {t("landing.features.title2")}
           </h2>
           <p className="lp-section-lead">{t("landing.features.lead")}</p>
+          {/* fills the sticky column's lower half with quiet, factual meta —
+              what runs where, what you can bring */}
+          <ul className="lp-capabilities-meta" aria-hidden="true">
+            <li>{t("landing.features.meta1")}</li>
+            <li>{t("landing.features.meta2")}</li>
+          </ul>
         </div>
         <div className="lp-capability-list">
           {capabilities.map((cap) => {
@@ -167,6 +174,15 @@ export function LandingFaq() {
             {t("landing.faq.title2")}
           </h2>
           <p className="lp-section-lead">{t("landing.faq.lead")}</p>
+          {/* the intro column's lower half — a fallback for questions the
+              accordion doesn't answer */}
+          <a className="lp-faq-more" href={`${LANDING_REPO_URL}/issues`} target="_blank" rel="noreferrer">
+            <span className="lp-faq-more-title">{t("landing.faq.more")}</span>
+            <span className="lp-faq-more-link">
+              {t("landing.faq.moreLink")}
+              <ArrowRightIcon />
+            </span>
+          </a>
         </div>
         <div className="lp-faq-list">
           {items.map((n, index) => (

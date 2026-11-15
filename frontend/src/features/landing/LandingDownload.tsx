@@ -1,6 +1,6 @@
 import { useLanguage } from "@/contexts/LanguageContext";
-import { ArrowRightIcon, DownloadIcon } from "./landing-icons";
-import { LANDING_RELEASES_URL } from "./LandingHeader";
+import { ArrowRightIcon, DownloadIcon, GithubIcon } from "./landing-icons";
+import { LANDING_RELEASES_URL, LANDING_REPO_URL } from "./LandingHeader";
 
 /**
  * The gradient download CTA panel above the FAQ. The download itself is an
@@ -14,11 +14,11 @@ export function LandingDownloadSection() {
       <div className="lp-container">
         <div className="lp-download-panel">
           <svg className="lp-download-lines" viewBox="0 0 1200 460" preserveAspectRatio="none" aria-hidden="true">
-            <g fill="none" stroke="var(--lp-on-warm)" strokeWidth="1" opacity="0.14">
+            <g fill="none" stroke="var(--lp-on-warm)" strokeWidth="1" opacity="0.22">
               <path d="M0 92 196 160 378 58M1200 90 1010 168 830 62M0 376l194-74 176 88M1200 372l-190-70-180 88" />
               <path d="m196 160-2 142M1010 168v134M378 58l76 322M830 62l-74 330" strokeDasharray="5 8" />
             </g>
-            <g fill="var(--lp-on-warm)" opacity="0.18">
+            <g fill="var(--lp-on-warm)" opacity="0.26">
               <circle cx="196" cy="160" r="7" />
               <circle cx="194" cy="302" r="5" />
               <circle cx="378" cy="58" r="6" />
@@ -51,8 +51,17 @@ export function LandingDownloadSection() {
             <div className="lp-download-platforms" aria-label={t("landing.download.platformsAria")}>
               <span>macOS</span>
               <span>Windows</span>
-              <span>iOS / Android</span>
+              {/* shipping platforms only — mobile stays visibly "soon", matching
+                  the note above and what Releases actually hosts */}
+              <span className="lp-platform-soon">
+                iOS / Android
+                <em className="lp-soon-chip">{t("landing.download.soon")}</em>
+              </span>
             </div>
+            <a className="lp-download-oss" href={LANDING_REPO_URL} target="_blank" rel="noreferrer">
+              <GithubIcon />
+              {t("landing.download.openSource")}
+            </a>
           </div>
         </div>
       </div>

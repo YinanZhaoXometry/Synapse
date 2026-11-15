@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { Bookmark, Library } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { AskIcon, OrganizeIcon, PlanIcon, ReviewIcon } from "./landing-icons";
 import type { DemoTabId } from "./LandingSections";
@@ -101,6 +102,19 @@ export function LandingPreview({
                     );
                   })}
                 </div>
+                <div className="lp-rail-group">
+                  <p className="lp-space-label">{t("landing.preview.rail.label2")}</p>
+                  <ul className="lp-rail-rows" aria-hidden="true">
+                    <li>
+                      <Library size={16} strokeWidth={1.7} />
+                      {t("landing.preview.rail.item5")}
+                    </li>
+                    <li>
+                      <Bookmark size={16} strokeWidth={1.7} />
+                      {t("landing.preview.rail.item6")}
+                    </li>
+                  </ul>
+                </div>
                 <div className="lp-sidebar-note">
                   <p className="lp-sidebar-note-title">{t("landing.preview.weekTitle")}</p>
                   <p className="lp-sidebar-note-text">{t("landing.preview.weekText")}</p>
@@ -173,13 +187,21 @@ function OrganizePanel({ hidden }: { hidden: boolean }) {
             <span className="lp-concept-chip">{t("landing.preview.organize.concept2")}</span>
             <span className="lp-concept-chip">{t("landing.preview.organize.concept3")}</span>
             <span className="lp-concept-chip">{t("landing.preview.organize.concept4")}</span>
+            <span className="lp-concept-chip">{t("landing.preview.organize.concept5")}</span>
           </div>
         </article>
         <aside className="lp-relation-panel">
           <h3>{t("landing.preview.organize.relationTitle")}</h3>
           <p>{t("landing.preview.organize.relationNote")}</p>
           <svg viewBox="0 0 180 150" role="img" aria-label={t("landing.preview.organize.relationAria")}>
-            <path d="M90 72 37 30M90 72l52-42M90 72l-51 49M90 72l53 49" fill="none" stroke="var(--lp-map-line)" strokeWidth="1.4" />
+            {/* curved, socket-dotted edges; satellites vary in size/weight so the
+                hub reads as a real relation graph, not a symmetric wireframe */}
+            <g fill="none" stroke="var(--lp-map-line)" strokeWidth="1.2" strokeDasharray="4 5" opacity="0.72">
+              <path d="M67.2 54Q65.3 39.6 50.8 40.9" />
+              <path d="M112.4 53.6Q115.2 38.3 130.8 38.4" />
+              <path d="M69.7 92.7Q66.7 110.1 49.3 113.5" />
+              <path d="M110.7 92.3Q113.7 109.3 130.7 112" />
+            </g>
             <circle cx="90" cy="72" r="29" fill="var(--lp-accent-soft)" stroke="var(--lp-accent)" />
             <text x="90" y="69" textAnchor="middle" fill="var(--lp-accent-deep)" fontSize="11" fontWeight="700">
               {t("landing.preview.organize.r.core1")}
@@ -187,17 +209,26 @@ function OrganizePanel({ hidden }: { hidden: boolean }) {
             <text x="90" y="84" textAnchor="middle" fill="var(--lp-accent-deep)" fontSize="11" fontWeight="700">
               {t("landing.preview.organize.r.core2")}
             </text>
-            <g fill="var(--lp-surface)" stroke="var(--lp-border)">
-              <circle cx="34" cy="27" r="22" />
-              <circle cx="146" cy="27" r="22" />
-              <circle cx="34" cy="125" r="22" />
-              <circle cx="146" cy="125" r="22" />
+            <circle cx="32" cy="26" r="24" fill="var(--lp-surface)" stroke="var(--lp-border)" />
+            <circle cx="147" cy="25" r="21" fill="var(--lp-surface)" stroke="var(--lp-border)" />
+            <circle cx="36" cy="127" r="19" fill="var(--lp-surface)" stroke="var(--lp-border-soft)" />
+            <circle cx="145" cy="126" r="20" fill="var(--lp-surface)" stroke="var(--lp-border-soft)" />
+            <g fontSize="10" textAnchor="middle">
+              <text x="32" y="30" fill="var(--lp-fg-2)">{t("landing.preview.organize.r.encode")}</text>
+              <text x="147" y="29" fill="var(--lp-fg-2)">{t("landing.preview.organize.r.retrieve")}</text>
+              <text x="36" y="131" fill="var(--lp-text-subtle)">{t("landing.preview.organize.r.forget")}</text>
+              <text x="145" y="130" fill="var(--lp-text-subtle)">{t("landing.preview.organize.r.space")}</text>
             </g>
-            <g fill="var(--lp-fg-2)" fontSize="10" textAnchor="middle">
-              <text x="34" y="31">{t("landing.preview.organize.r.encode")}</text>
-              <text x="146" y="31">{t("landing.preview.organize.r.retrieve")}</text>
-              <text x="34" y="129">{t("landing.preview.organize.r.forget")}</text>
-              <text x="146" y="129">{t("landing.preview.organize.r.space")}</text>
+            {/* sockets above the nodes, same as the hero map */}
+            <g fill="var(--lp-map-line)" stroke="var(--lp-bg)" strokeWidth="0.8" opacity="0.95">
+              <circle cx="67.2" cy="54" r="2" />
+              <circle cx="50.8" cy="40.9" r="2" />
+              <circle cx="112.4" cy="53.6" r="2" />
+              <circle cx="130.8" cy="38.4" r="2" />
+              <circle cx="69.7" cy="92.7" r="2" />
+              <circle cx="49.3" cy="113.5" r="2" />
+              <circle cx="110.7" cy="92.3" r="2" />
+              <circle cx="130.7" cy="112" r="2" />
             </g>
           </svg>
         </aside>
@@ -295,6 +326,7 @@ function ReviewPanel({ hidden }: { hidden: boolean }) {
     { x: 408, y: 30, h: 120, value: 20 },
     { x: 478, y: 40, h: 110, value: 18 },
   ];
+  const bestValue = Math.max(...bars.map((bar) => bar.value));
   return (
     <PanelShell
       tab="review"
@@ -330,9 +362,23 @@ function ReviewPanel({ hidden }: { hidden: boolean }) {
           <g stroke="var(--lp-border)" strokeWidth="1">
             <path d="M40 20H540M40 65H540M40 110H540M40 150H540" />
           </g>
+          <defs>
+            <linearGradient id="lp-review-bar-best" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="var(--lp-peach)" />
+              <stop offset="1" stopColor="var(--lp-coral)" />
+            </linearGradient>
+          </defs>
           <g fill="var(--lp-accent-soft)">
             {bars.map((bar) => (
-              <rect key={bar.x} x={bar.x} y={bar.y} width="42" height={bar.h} rx="6" />
+              <rect
+                key={bar.x}
+                x={bar.x}
+                y={bar.y}
+                width="42"
+                height={bar.h}
+                rx="6"
+                fill={bar.value === bestValue ? "url(#lp-review-bar-best)" : undefined}
+              />
             ))}
           </g>
           <g fill="var(--lp-accent)" fontSize="12" textAnchor="middle" fontWeight="700">
