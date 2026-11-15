@@ -1,4 +1,5 @@
 import { useLanguage } from "@/contexts/LanguageContext";
+import { LANDING_REPO_URL } from "./LandingHeader";
 import { BrandMark } from "./landing-icons";
 
 export function LandingFooter() {
@@ -19,6 +20,7 @@ export function LandingFooter() {
           <a href="#lp-scenarios">{t("landing.nav.scenarios")}</a>
           <a href="#lp-faq">{t("landing.nav.faq")}</a>
           <a href="#lp-top">{t("landing.footer.top")}</a>
+          <a href={LANDING_REPO_URL} target="_blank" rel="noreferrer">GitHub</a>
         </nav>
       </div>
     </footer>

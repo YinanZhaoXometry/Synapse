@@ -39,6 +39,21 @@ afterEach(() => {
   document.documentElement.classList.remove("lp-active");
 });
 
+describe("LandingPage — the GitHub repo link (owner ask 2026-11-15)", () => {
+  it("links the repository from the header pill and the footer nav (new tab)", async () => {
+    renderLanding();
+    await screen.findByText(zh["landing.hero.lead"]);
+
+    const header = screen.getByRole("link", { name: zh["landing.header.githubAria"] });
+    expect(header).toHaveAttribute("href", "https://github.com/YinanZhaoXometry/Synapse");
+    expect(header).toHaveAttribute("target", "_blank");
+
+    const footer = screen.getByRole("link", { name: "GitHub" });
+    expect(footer).toHaveAttribute("href", "https://github.com/YinanZhaoXometry/Synapse");
+    expect(footer).toHaveAttribute("rel", "noreferrer");
+  });
+});
+
 describe("LandingPage — the marketing root", () => {
   it("renders the five sections + footer from the zh dictionary and owns the tab title", async () => {
     const original = document.title;
