@@ -200,6 +200,6 @@ jobs:
           gh release create "${{ needs.guard.outputs.tag }}" \
             artifacts/desktop-macos/*.dmg \
             artifacts/desktop-windows/*.exe \
-            --title "Synapse Desktop ${{ needs.guard.outputs.tag }}" \
+            --title "Synapse Desktop ${GITHUB_REF_NAME#desktop-v}" \
             --notes-file release-notes.md \
             --latest
