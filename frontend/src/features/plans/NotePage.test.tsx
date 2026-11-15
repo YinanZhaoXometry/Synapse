@@ -152,7 +152,10 @@ describe("NotePage (epic-35 T02 — the reading page over the shared NoteBodyVie
     mountNotePage("note-2", [ notesMock([note({ id: "note-2", scope: "node", scopeId: "n-1" })]), planMock ]);
 
     await waitFor(() => expect(screen.getByTestId("note-page-title")).toBeTruthy());
-    expect(screen.getByText("Consensus")).toBeTruthy();
+    // The target title rides the SEPARATE Plan read — it can resolve a tick
+    // after the notes-sourced title (full-suite load makes that tick real;
+    // epic-37's added suite weight exposed the latent race). Poll for it.
+    expect(await screen.findByText("Consensus")).toBeTruthy();
   });
 
   it("backs to the plan home", async () => {
