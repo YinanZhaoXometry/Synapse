@@ -79,6 +79,11 @@ export interface ReadingCompanionPanelProps {
   selectionRef?: MutableRefObject<string | null>;
   /** The selection bar's composer pre-fill (the quote, honestly displayed). */
   askPrefill?: AskPrefill | null;
+  /** Streaming-state out-plug (owner bug round 2026-11-15): the immersive
+   * float's collapsed pill pulses while a turn is mid-flight, so collapsing
+   * during a reply never hides the activity. Fires on every change; null
+   * streamText = idle. */
+  onStreamingChange?(streaming: boolean): void;
 }
 
 /**
@@ -400,9 +405,16 @@ function ReadingCompanionSurface({
   onJumpToLocator,
   selectionRef,
   askPrefill,
+  onStreamingChange,
 }: ReadingCompanionPanelProps) {
   const { t } = useLanguage();
   const chat = useCompanionChat(materialId, positionRef, selectionRef);
+
+  // The immersive float's pill pulse: forward the turn's liveness upward so
+  // the collapsed pill can signal a reply still streaming behind it.
+  useEffect(() => {
+    onStreamingChange?.(chat.streamText !== null);
+  }, [chat.streamText, onStreamingChange]);
 
   // The selection bar's ask (epic-13 T1): drop the quote into the composer so
   // the user sees exactly what the Companion will be asked about. Identity is

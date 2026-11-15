@@ -12,7 +12,8 @@ module Tasks
   #   sweeps the ER's foreign keys mandate before those rows can go: the
   #   task-scope quiz sessions (quiz_sessions.task_id, XOR owner check) and
   #   their question/evidence/mistake graph, flashcards, annotations,
-  #   section markings, reading progress, and the chat thread. Task nodes
+  #   section markings, reading progress, the chat thread, and the material's
+  #   auto-mapping rows (material_node_mappings). Task nodes
   #   have no edges (knowledge_node_edges.plan_id is NOT NULL — the stage
   #   graph is plan-side).
   # - promoted task (the read-only pointer, epic-14 T2): the content lives
@@ -98,6 +99,13 @@ module Tasks
         current_user.section_markings.where(material_id: material_ids).delete_all
         current_user.reading_progresses.where(material_id: material_ids).delete_all
         current_user.chat_threads.where(material_id: material_ids).delete_all
+        # The material's auto-mapping rows (FR-45) reference BOTH sides of the
+        # triangle — the sweep the node/material deletion mandates (owner bug
+        # round 2026-11-15: the FKs blew up on the unswept rows).
+        current_user.material_node_mappings
+          .where(node_id: node_ids)
+          .or(current_user.material_node_mappings.where(material_id: material_ids))
+          .delete_all
         current_user.quiz_sessions.where(id: session_ids).delete_all
         # The triangle is MUTUALLY referential (AD-6) with plain FKs and no
         # on_delete: study_tasks.node_id/.material_id point at the pair while

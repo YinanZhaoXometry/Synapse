@@ -14,6 +14,7 @@ const SE_FAMILY = /软件|工程|测试|需求|架构|agile|software|engineer|te
 
 const STAGE_NAMES: Record<UiLanguage, { se: string[]; generic: string[] }> = {
   zh: { se: ["软件过程", "需求", "设计", "测试与交付"], generic: ["基础", "核心", "进阶", "应用"] },
+  "zh-TW": { se: ["軟件過程", "需求", "設計", "測試與交付"], generic: ["基礎", "核心", "進階", "應用"] },
   en: { se: ["Process", "Requirements", "Design", "Testing & Delivery"], generic: ["Foundations", "Core", "Advanced", "Application"] },
 };
 
@@ -23,6 +24,12 @@ const SE_NODES: Record<UiLanguage, string[][]> = {
     ["需求获取与澄清", "需求规约与验收标准"],
     ["架构与设计原则", "UML 建模基础"],
     ["测试层级与集成测试", "质量属性与交付"],
+  ],
+  "zh-TW": [
+    ["軟件生命週期", "過程模型與敏捷"],
+    ["需求獲取與澄清", "需求規約與驗收標準"],
+    ["架構與設計原則", "UML 建模基礎"],
+    ["測試層級與集成測試", "質量屬性與交付"],
   ],
   en: [
     ["Software lifecycle", "Process models & agile"],
@@ -34,6 +41,7 @@ const SE_NODES: Record<UiLanguage, string[][]> = {
 
 const INTRO: Record<UiLanguage, string> = {
   zh: "好——我按阶段搭好了学习骨架，确认后就可以附上你的材料。",
+  "zh-TW": "好——我按階段搭好了學習骨架，確認後就可以附上你的材料。",
   en: "Done — here's the staged skeleton. Confirm it, then attach your materials.",
 };
 
@@ -65,6 +73,12 @@ function genericStages(topic: string, language: UiLanguage): ProposedStage[] {
       [`${t} 的关键机制`, `${t} 常见问题`],
       [`${t} 的深入专题`, `${t} 与相邻领域`],
       [`${t} 的实际应用`, `${t} 自测与巩固`],
+    ],
+    "zh-TW": [
+      [`${t} 是什麼`, `${t} 的核心概念`],
+      [`${t} 的關鍵機制`, `${t} 常見問題`],
+      [`${t} 的深入專題`, `${t} 與相鄰領域`],
+      [`${t} 的實際應用`, `${t} 自測與鞏固`],
     ],
     en: [
       [`What is ${t}`, `Core concepts of ${t}`],

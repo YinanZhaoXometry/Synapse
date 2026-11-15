@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_12_090001) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_15_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -189,7 +189,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_12_090001) do
     t.index ["user_id"], name: "index_materials_on_user_id"
     t.check_constraint "attachment_scope::text = ANY (ARRAY['plan'::character varying::text, 'node'::character varying::text])", name: "materials_attachment_scope_check"
     t.check_constraint "kind::text = ANY (ARRAY['pdf'::character varying::text, 'markdown'::character varying::text])", name: "materials_kind_check"
-    t.check_constraint "origin::text = ANY (ARRAY['uploaded'::character varying, 'generated'::character varying]::text[])", name: "materials_origin_check"
+    t.check_constraint "origin::text = ANY (ARRAY['uploaded'::character varying::text, 'generated'::character varying::text])", name: "materials_origin_check"
     t.check_constraint "parse_failure_reason IS NULL OR (parse_failure_reason::text = ANY (ARRAY['corrupt'::character varying::text, 'encrypted'::character varying::text, 'empty'::character varying::text, 'unknown'::character varying::text]))", name: "materials_parse_failure_reason_check"
     t.check_constraint "parse_state::text = ANY (ARRAY['pending'::character varying::text, 'parsing'::character varying::text, 'parsed'::character varying::text, 'failed'::character varying::text])", name: "materials_parse_state_check"
   end
@@ -468,7 +468,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_12_090001) do
     t.datetime "updated_at", null: false
     t.index ["token"], name: "index_stream_tickets_on_token", unique: true
     t.index ["user_id"], name: "index_stream_tickets_on_user_id"
-    t.check_constraint "op::text = ANY (ARRAY['companion'::character varying, 'proposal'::character varying, 'plan_companion'::character varying, 'lesson'::character varying]::text[])", name: "stream_tickets_op_check"
+    t.check_constraint "op::text = ANY (ARRAY['companion'::character varying::text, 'proposal'::character varying::text, 'plan_companion'::character varying::text, 'lesson'::character varying::text])", name: "stream_tickets_op_check"
   end
 
   create_table "study_focus_sets", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -561,8 +561,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_12_090001) do
   add_foreign_key "knowledge_nodes", "study_tasks", column: "task_id"
   add_foreign_key "knowledge_nodes", "users"
   add_foreign_key "manual_tasks", "users"
-  add_foreign_key "material_node_mappings", "knowledge_nodes", column: "node_id"
-  add_foreign_key "material_node_mappings", "materials"
+  add_foreign_key "material_node_mappings", "knowledge_nodes", column: "node_id", on_delete: :cascade
+  add_foreign_key "material_node_mappings", "materials", on_delete: :cascade
   add_foreign_key "material_node_mappings", "users"
   add_foreign_key "materials", "knowledge_nodes", column: "node_id"
   add_foreign_key "materials", "study_plans", column: "plan_id"

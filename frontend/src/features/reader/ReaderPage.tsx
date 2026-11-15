@@ -49,16 +49,28 @@ import {
   PanelRightOpen,
   RotateCw,
   Upload,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { previousNavPathname, sourceBackTarget } from "@/lib/nav-history";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useShellChrome } from "@/components/layout/shell-chrome";
 import { useViewportTier } from "@/hooks/use-mobile";
 import {
   apiErrorCode,
   apiErrorKeys,
   newClientUuid,
+  addAnnotationListUpdate,
+  buildAddAnnotationOptimistic,
+  buildClaimSectionOptimistic,
+  buildRemoveAnnotationOptimistic,
+  buildUnclaimSectionOptimistic,
+  claimSectionListUpdate,
+  newOptimisticAnnotationId,
+  newOptimisticMarkingId,
+  removeAnnotationListUpdate,
   useAddAnnotationMutation,
   useAnnotationsQuery,
   useClaimSectionMutation,
@@ -76,7 +88,7 @@ import {
 import type { ErrorLike } from "@apollo/client";
 import { sessionBlobs } from "@/lib/session-blobs";
 import { CompanionPanel, type AskPrefill } from "@/features/companion/CompanionPanel";
-import { CompanionOverlay, CompanionSheet } from "./companion-surfaces";
+import { CompanionFloat, CompanionOverlay, CompanionSheet } from "./companion-surfaces";
 import { cn } from "@/lib/utils";
 import type { Annotation, ReadingLocator } from "@/domain/entities";
 import { PARSE_REASON_MESSAGE_KEY } from "./parse";
@@ -167,18 +179,33 @@ export default function ReaderPage() {
     [markingsQuery.data, openBySection],
   );
 
-  // Claim when unclaimed, unmark when claimed. Success stays silent — the
-  // green arriving via the read-back sweep IS the feedback; failure toasts
-  // honestly (sonner, AD-9).
+  // Claim when unclaimed, unmark when claimed — OPTIMISTICALLY (owner bug
+  // round 2026-11-15): the green lands on the click. The claim paints a temp
+  // full-shape row (the list update hands it to the server row on the
+  // response); the unmark paints the same cached row with clearedAt set.
+  // Success stays silent (the optimistic paint IS the feedback); a wire
+  // failure clears the optimistic layer and toasts honestly (sonner, AD-9).
   const handleToggleClaim = useCallback(
     (sectionId: string) => {
       if (!material) return;
-      const unmarking = openBySection.has(sectionId);
-      const mutate = unmarking ? unclaimSectionMutation : claimSectionMutation;
-      void mutate({
-        variables: { input: { materialId: material.id, sectionId } },
-        onError: () => toast.error(t(unmarking ? "marking.unmarkFailed" : "marking.claimFailed")),
-      });
+      const open = openBySection.get(sectionId);
+      if (open !== undefined) {
+        // The mapped view row IS the raw row's contract fields (id, materialId,
+        // sectionId, claimedAt) — no fragment read needed for the paint.
+        void unclaimSectionMutation({
+          variables: { input: { materialId: material.id, sectionId } },
+          optimisticResponse: buildUnclaimSectionOptimistic(open, new Date().toISOString()),
+          onError: () => toast.error(t("marking.unmarkFailed")),
+        });
+      } else {
+        const tempId = newOptimisticMarkingId();
+        void claimSectionMutation({
+          variables: { input: { materialId: material.id, sectionId } },
+          optimisticResponse: buildClaimSectionOptimistic(material.id, sectionId, tempId, new Date().toISOString()),
+          update: claimSectionListUpdate(material.id, tempId),
+          onError: () => toast.error(t("marking.claimFailed")),
+        });
+      }
     },
     [material, openBySection, claimSectionMutation, unclaimSectionMutation, t],
   );
@@ -253,6 +280,35 @@ export default function ReaderPage() {
 
   const [panelChoice, setPanelChoice] = useState<boolean | null>(null);
   const [immersive, setImmersive] = useState(false);
+  // Immersive owns the whole viewport (owner bug round 2026-11-15): the shell
+  // chrome (sidebars, mobile header/bottom nav) stands down while immersive
+  // is on and comes back on exit — including the unmount cleanup, so
+  // navigating away mid-immersive never strands the shell hidden.
+  const { setChromeHidden } = useShellChrome();
+  useEffect(() => {
+    setChromeHidden(immersive);
+    return () => setChromeHidden(false);
+  }, [immersive, setChromeHidden]);
+  // The immersive Companion float (owner bug round 2026-11-15): pill ⇄ float
+  // card over the immersive reading. Leaving immersive resets to the pill —
+  // re-entering starts collapsed (the reading comes first); `floatStreaming`
+  // drives the pill's pulse while a reply streams behind the collapsed card.
+  const [floatExpanded, setFloatExpanded] = useState(false);
+  const [floatStreaming, setFloatStreaming] = useState(false);
+  const handleFloatStreaming = useCallback((streaming: boolean) => setFloatStreaming(streaming), []);
+  useEffect(() => {
+    if (!immersive) setFloatExpanded(false);
+  }, [immersive]);
+  // PDF zoom (owner bug round 2026-11-15): fit-width is no longer the only
+  // size — a discrete ladder over fit-width, stepped by the top-bar controls
+  // and rendered by PdfPageFlow through the width seam. 1 = fit-width.
+  const [pdfZoom, setPdfZoom] = useState(1);
+  const PDF_ZOOM_MIN = 0.5;
+  const PDF_ZOOM_MAX = 3;
+  const zoomIn = () =>
+    setPdfZoom((z) => Math.min(PDF_ZOOM_MAX, Math.round((z + 0.25) * 100) / 100));
+  const zoomOut = () =>
+    setPdfZoom((z) => Math.max(PDF_ZOOM_MIN, Math.round((z - 0.25) * 100) / 100));
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState<number | null>(null);
   const flowRef = useRef<PdfFlowHandle | null>(null);
@@ -314,13 +370,20 @@ export default function ReaderPage() {
         setAnnotationsPanelOpen(false);
         return;
       }
+      // The immersive float joins the chain ahead of the ladder surfaces —
+      // its card collapses to the pill first; the next Escape leaves
+      // immersive entirely.
+      if (immersive && floatExpanded) {
+        setFloatExpanded(false);
+        return;
+      }
       const floating = tier === "tablet" || tier === "mobile";
       if (floating && panelOpen) setPanelChoice(false);
       else if (immersive) setImmersive(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tier, panelOpen, immersive, selectionBar, annotationsPanelOpen, focusPanelOpen]);
+  }, [tier, panelOpen, immersive, floatExpanded, selectionBar, annotationsPanelOpen, focusPanelOpen]);
 
   // Stored progress (FR-10): the restore target when no anchor asks for one.
   // The flows mount only once this query has settled (gate below), so the
@@ -498,8 +561,11 @@ export default function ReaderPage() {
 
   // The chips' handler: re-capture the LIVE selection (the bar kept it
   // alive through the click — the mousedown suppression), build the AD-2
-  // range through the engine's capture seam, and persist. The read-back
-  // sweep re-applies; the bar closes (the selection's job is done).
+  // range through the engine's capture seam, and persist — OPTIMISTICALLY
+  // (owner bug round 2026-11-15): the highlight paints on the click, the
+  // round-trip + read-back sweep run invisibly behind it, and a wire failure
+  // rolls the paint back with an honest toast (AD-9). The bar closes (the
+  // selection's job is done).
   const handleAnnotate = useCallback(
     (kind: AnnotationKind, color: AnnotationColor | null) => {
       const zone = materialZoneRef.current;
@@ -521,10 +587,24 @@ export default function ReaderPage() {
         captured.kind === "pdf"
           ? { page: range.page, start: range.start, end: range.end, quote: range.quote }
           : { sectionId: range.sectionId, start: range.start, end: range.end, quote: range.quote };
+      const tempId = newOptimisticAnnotationId();
       void addAnnotationMutation({
         variables: {
           input: { materialId: current.id, locator: locatorInput, range: rangeInput, kind, color: color ?? undefined, body: "" },
         },
+        optimisticResponse: buildAddAnnotationOptimistic(
+          {
+            materialId: current.id,
+            locator: { kind: locatorInput.kind, page: locatorInput.page ?? null, sectionId: locatorInput.sectionId ?? null },
+            range: rangeInput,
+            kind,
+            color,
+            body: "",
+          },
+          tempId,
+          new Date().toISOString(),
+        ),
+        update: addAnnotationListUpdate(current.id, tempId),
         onError: () => toast.error(t("reader.annotationAddFailed")),
       });
     },
@@ -533,8 +613,18 @@ export default function ReaderPage() {
 
   const handleRemoveAnnotation = useCallback(
     (id: string) => {
+      const materialId = materialRef.current?.id;
       void removeAnnotationMutation({
         variables: { id },
+        // The optimistic evict (owner bug round 2026-11-15): the mark is gone
+        // on the click; the sweep confirms. Without the materialId there is no
+        // list to update — fire bare (the read-back carries the removal).
+        ...(materialId
+          ? {
+              optimisticResponse: buildRemoveAnnotationOptimistic(id),
+              update: removeAnnotationListUpdate(materialId, id),
+            }
+          : {}),
         onError: () => toast.error(t("reader.annotationRemoveFailed")),
       });
     },
@@ -754,6 +844,39 @@ export default function ReaderPage() {
                   <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
                 </button>
                 <span className="w-px h-4 bg-border" aria-hidden="true" />
+                {/* Zoom (owner bug round 2026-11-15): − / percent / + with the
+                    percent click resetting to fit-width. The flow restores
+                    the relative scroll position across the reflow. */}
+                <button
+                  type="button"
+                  onClick={zoomOut}
+                  aria-label={t("reader.zoomOutAria")}
+                  disabled={pdfZoom <= PDF_ZOOM_MIN}
+                  data-testid="pdf-zoom-out"
+                  className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-[var(--glass-2)] disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPdfZoom(1)}
+                  aria-label={t("reader.zoomResetAria")}
+                  data-testid="pdf-zoom-reset"
+                  className="font-display font-semibold tabular-nums text-[13px] px-1 min-w-[44px] text-center rounded-md hover:text-foreground hover:bg-[var(--glass-2)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {Math.round(pdfZoom * 100)}%
+                </button>
+                <button
+                  type="button"
+                  onClick={zoomIn}
+                  aria-label={t("reader.zoomInAria")}
+                  disabled={pdfZoom >= PDF_ZOOM_MAX}
+                  data-testid="pdf-zoom-in"
+                  className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-[var(--glass-2)] disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+                <span className="w-px h-4 bg-border" aria-hidden="true" />
               </>
             )}
             <IconToggle
@@ -878,6 +1001,7 @@ export default function ReaderPage() {
               <PdfPageFlow
                 ref={flowRef}
                 blob={sessionBlobs.get(material.id)}
+                zoom={pdfZoom}
                 initialPage={anchor.page ?? storedPdfPage}
                 flashTarget={anchor.highlight}
                 onPageChange={handlePageChange}
@@ -964,6 +1088,57 @@ export default function ReaderPage() {
               askPrefill={askPrefill}
             />
           </CompanionSheet>
+        )}
+
+        {/* The immersive float (owner bug round 2026-11-15): the Companion
+            follows the reader into immersion — pill ⇄ floating glass card
+            (tablet/desktop) or pill ⇄ sheet (mobile), no docked column, no
+            scrim. Collapsing keeps the panel mounted (minimize, not abandon),
+            so a reply streams on behind the pill; the ladder surfaces above
+            own the non-immersive arrangement again on exit. */}
+        {immersive && tier !== "mobile" && (
+          <CompanionFloat
+            label={t("companion.title")}
+            expandLabel={t("reader.companionFloatOpenAria")}
+            collapseLabel={t("reader.companionFloatCollapseAria")}
+            streaming={floatStreaming}
+            expanded={floatExpanded}
+            onExpandedChange={setFloatExpanded}
+            variant="card"
+          >
+            <CompanionPanel
+              materialId={material.id}
+              material={material}
+              positionRef={currentPositionRef}
+              displayLocator={displayLocator}
+              onJumpToLocator={jumpToLocator}
+              selectionRef={pendingSelectionRef}
+              askPrefill={askPrefill}
+              onStreamingChange={handleFloatStreaming}
+            />
+          </CompanionFloat>
+        )}
+        {immersive && tier === "mobile" && (
+          <CompanionFloat
+            label={t("companion.title")}
+            expandLabel={t("reader.companionFloatOpenAria")}
+            collapseLabel={t("reader.companionCloseAria")}
+            streaming={floatStreaming}
+            expanded={floatExpanded}
+            onExpandedChange={setFloatExpanded}
+            variant="sheet"
+          >
+            <CompanionPanel
+              materialId={material.id}
+              material={material}
+              positionRef={currentPositionRef}
+              displayLocator={displayLocator}
+              onJumpToLocator={jumpToLocator}
+              selectionRef={pendingSelectionRef}
+              askPrefill={askPrefill}
+              onStreamingChange={handleFloatStreaming}
+            />
+          </CompanionFloat>
         )}
 
         {/* The selection shortcuts bar (FR-13): floats beside the live

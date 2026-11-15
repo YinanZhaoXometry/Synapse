@@ -12,8 +12,11 @@
 module Ai
   # The reply-language vocabulary (AD-16: one language parameter, one policy
   # — every AI surface, mutations and streams alike, takes one of these and
-  # is prompted to answer in it).
-  LANGUAGES = %w[zh en].freeze
+  # is prompted to answer in it). "zh-TW" (owner bug round 2026-11-15) is the
+  # traditional-Chinese UI locale riding the same one-parameter policy — the
+  # frontend's dictionary adds the third column and the directive names the
+  # script (繁體中文) through Ai::Prompts.language_word.
+  LANGUAGES = %w[zh en zh-TW].freeze
 
   # The stream-op vocabulary (AD-16, ticket 04 — the ticket contract): the
   # streamed surfaces. "companion" = position-grounded study chat on a

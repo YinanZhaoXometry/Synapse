@@ -1,4 +1,5 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import type { UiLanguage } from "@/ai/types";
 import { useState } from "react";
 import { toast } from "sonner";
 import { BookOpen, GitFork, Plus, Trash2 } from "lucide-react";
@@ -160,7 +161,7 @@ export default function PlansHomePage() {
 }
 
 /** Returning state (Q5): continue hero + plan cards, numbers from the server fields only. */
-function ReturningHome({ plans, language }: { plans: StudyPlanView[]; language: "zh" | "en" }) {
+function ReturningHome({ plans, language }: { plans: StudyPlanView[]; language: UiLanguage }) {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const hero = mostRecentPlan(plans);
