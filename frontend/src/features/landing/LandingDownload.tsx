@@ -47,12 +47,11 @@ export function LandingDownloadSection() {
                 <ArrowRightIcon />
               </a>
             </div>
-            <p className="lp-download-note">{t("landing.download.note")}</p>
             <div className="lp-download-platforms" aria-label={t("landing.download.platformsAria")}>
               <span>macOS</span>
               <span>Windows</span>
-              {/* shipping platforms only — mobile stays visibly "soon", matching
-                  the note above and what Releases actually hosts */}
+              {/* shipping platforms full-weight, mobile visibly "soon" — matching
+                  what Releases actually hosts */}
               <span className="lp-platform-soon">
                 iOS / Android
                 <em className="lp-soon-chip">{t("landing.download.soon")}</em>

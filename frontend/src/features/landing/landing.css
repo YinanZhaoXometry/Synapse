@@ -154,14 +154,17 @@ html.lp-active {
   color: inherit;
   text-decoration: none;
 }
-.lp-root p,
-.lp-root h1,
-.lp-root h2,
-.lp-root h3,
-.lp-root h4 {
+/* p/h1-h4 ride :where() too — a bare `.lp-root p` (0,1,1) would outrank every
+ * single-class margin rule (round 7: it silently flattened the type rhythm;
+ * the owner's "paragraphs need breathing room" note was this bug showing) */
+:where(.lp-root) p,
+:where(.lp-root) h1,
+:where(.lp-root) h2,
+:where(.lp-root) h3,
+:where(.lp-root) h4 {
   margin: 0;
 }
-.lp-root ol {
+:where(.lp-root) ol {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -343,6 +346,16 @@ html.lp-active {
   min-height: 40px;
   padding: 9px 15px;
   font-size: 14px;
+}
+/* the header pill's download CTA runs a notch smaller than page CTAs so it
+ * sits level with the nav links instead of towering over them (owner round 7) */
+.lp-header-actions .lp-btn-sm {
+  min-height: 34px;
+  padding: 6px 13px;
+  font-size: 13px;
+}
+.lp-header-actions .lp-btn-sm .lp-icon {
+  --lp-icon-size: 15px;
 }
 .lp-text-link {
   display: inline-flex;
@@ -631,17 +644,12 @@ html.lp-active {
   gap: var(--lp-space-3);
   margin-top: var(--lp-space-8);
 }
-.lp-hero-note {
-  margin-top: var(--lp-space-5);
-  color: var(--lp-text-subtle);
-  font-size: var(--lp-text-sm);
-}
 .lp-hero-principles {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: var(--lp-space-6);
-  margin-top: 40px;
+  margin-top: 44px;
 }
 .lp-hero-principle {
   display: flex;
@@ -1218,6 +1226,7 @@ html.lp-active {
 }
 .lp-note-paragraph {
   margin-top: var(--lp-space-4);
+  margin-bottom: 12px;
   color: var(--lp-fg-2);
   font-size: 14px;
   line-height: 1.85;
@@ -1582,25 +1591,20 @@ html.lp-active {
   background: rgba(255, 255, 255, 0.06);
   color: var(--lp-fg);
 }
-.lp-download-note {
-  margin-top: var(--lp-space-5);
-  color: var(--lp-text-subtle);
-  font-size: var(--lp-text-sm);
-}
 .lp-download-platforms {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: var(--lp-space-5);
-  margin-top: var(--lp-space-6);
+  margin-top: 28px;
   color: var(--lp-fg-2);
   font-family: var(--lp-font-mono);
   font-size: var(--lp-text-xs);
   font-weight: 500;
   letter-spacing: 0.04em;
 }
-/* future platforms step back and say so — matching the note above and what
- * Releases actually hosts (honesty over confidence) */
+/* future platforms step back and say so — matching what Releases actually
+ * hosts (honesty over confidence) */
 .lp-platform-soon {
   display: inline-flex;
   align-items: center;
@@ -1983,8 +1987,8 @@ html.lp-active {
     display: none;
   }
   .lp-header-actions .lp-btn-sm {
-    min-height: 40px;
-    padding-inline: 12px;
+    min-height: 36px;
+    padding: 5px 11px;
   }
   .lp-hero-grid {
     gap: 48px;
@@ -2048,9 +2052,15 @@ html.lp-active {
   .lp-knowledge-map .lp-map-sub {
     display: none;
   }
+  /* zh titles bump up for the small canvas; EN keeps its base size — its long
+   * labels ("Spaced repetition") would overflow the widened cards */
   .lp-knowledge-map .lp-map-title {
-    font-size: 19px;
+    font-size: 16px;
     transform: translateY(5px);
+  }
+  .lp-knowledge-map[data-lang="en"] .lp-map-title {
+    font-size: 12.5px;
+    transform: translateY(3px);
   }
   .lp-knowledge-map .lp-map-edges {
     opacity: 0.92;

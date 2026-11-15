@@ -249,3 +249,24 @@ describe("LandingPage — round 6 polish", () => {
     expect(screen.getByText(zh["landing.preview.organize.concept5"], { selector: ".lp-concept-chip" })).toBeVisible();
   });
 });
+
+describe("LandingPage — round 7 polish", () => {
+  it("drops the two installer notes (hero + download panel)", async () => {
+    renderLanding();
+    await screen.findByText(zh["landing.hero.lead"]);
+    expect(screen.queryByText("macOS / Windows 安装包可在 GitHub Releases 下载。")).toBeNull();
+    expect(screen.queryByText("安装包已在 GitHub Releases 提供，移动端将随后推出。")).toBeNull();
+  });
+
+  it("shortens the footer note to the tagline only", async () => {
+    renderLanding();
+    await screen.findByText(zh["landing.hero.lead"]);
+    expect(screen.getByText("让学习真正发生")).toBeVisible();
+  });
+
+  it("tags the knowledge map with the active language (mobile sizing hook)", async () => {
+    renderLanding();
+    await screen.findByText(zh["landing.hero.lead"]);
+    expect(document.querySelector(".lp-knowledge-map")).toHaveAttribute("data-lang", "zh");
+  });
+});

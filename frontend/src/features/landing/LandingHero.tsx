@@ -7,7 +7,7 @@ import { LANDING_RELEASES_URL } from "./LandingHeader";
  * design: window chrome, the memory-topic SVG map, the "next step" row).
  */
 export function LandingHero() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   return (
     <section className="lp-hero" id="lp-top" aria-labelledby="lp-hero-title">
       <div className="lp-container lp-hero-grid">
@@ -29,7 +29,6 @@ export function LandingHero() {
               <ArrowDownIcon />
             </a>
           </div>
-          <p className="lp-hero-note">{t("landing.hero.note")}</p>
           <div className="lp-hero-principles" aria-label={t("landing.hero.principlesAria")}>
             <span className="lp-hero-principle">{t("landing.hero.principle1")}</span>
             <span className="lp-hero-principle">{t("landing.hero.principle2")}</span>
@@ -56,12 +55,14 @@ export function LandingHero() {
                 </div>
                 <span className="lp-board-count">{t("landing.hero.boardCount")}</span>
               </div>
-              <div className="lp-knowledge-map">
+              <div className="lp-knowledge-map" data-lang={language}>
                 <svg viewBox="0 0 500 330" role="img" aria-labelledby="lp-map-title lp-map-desc">
                   <title id="lp-map-title">{t("landing.hero.mapTitle")}</title>
                   <desc id="lp-map-desc">{t("landing.hero.mapDesc")}</desc>
                   {/* connectors — curved, socket-dotted at both ends; the vertical
-                      axis (recall chip above, open node below) stays straight */}
+                      axis (recall chip above, open node below) stays straight.
+                      Satellite cards run wide (130/124) so the longest EN labels
+                      ("Spaced repetition", "How knowledge is used") stay inside. */}
                   <g className="lp-map-edges" fill="none" stroke="var(--lp-map-line)" strokeWidth="1.3" strokeDasharray="4 6" opacity="0.72">
                     <path d="M210.8 140.1Q195.7 108.5 152 107" />
                     <path d="M289.4 140.4Q307.7 107.1 345.6 104" />
@@ -69,8 +70,8 @@ export function LandingHero() {
                     <path d="M290.4 190.1Q311.4 223.6 350.7 226" />
                   </g>
                   <g fill="none" stroke="var(--lp-map-line)" strokeWidth="1" opacity="0.35">
-                    <path d="M177 79.5Q253.5 52 330 76.5" />
-                    <path d="M151 252Q245 277 339 250" />
+                    <path d="M184 79.5Q253.5 52 323 76.5" />
+                    <path d="M161 252Q245 277 329 250" />
                   </g>
                   <path d="M250 119V62M250 213V280" fill="none" stroke="var(--lp-map-line)" strokeWidth="1.3" opacity="0.5" />
                   {/* the halo stays INSIDE the socket ring (r47 + dot) so the
@@ -84,8 +85,8 @@ export function LandingHero() {
                     {t("landing.hero.map.coreSub")}
                   </text>
                   <g>
-                    <rect x="61" y="52" width="116" height="55" rx="14" fill="var(--lp-surface)" stroke="var(--lp-border)" />
-                    <text className="lp-map-title" x="119" y="76" textAnchor="middle" fill="var(--lp-fg)" fontSize="15" fontWeight="650">
+                    <rect x="54" y="52" width="130" height="55" rx="14" fill="var(--lp-surface)" stroke="var(--lp-border)" />
+                    <text className="lp-map-title" x="119" y="76" textAnchor="middle" fill="var(--lp-fg)" fontSize="13" fontWeight="650">
                       {t("landing.hero.map.encode")}
                     </text>
                     <text className="lp-map-sub" x="119" y="95" textAnchor="middle" fill="var(--lp-text-subtle)" fontSize="10">
@@ -93,8 +94,8 @@ export function LandingHero() {
                     </text>
                   </g>
                   <g>
-                    <rect x="330" y="49" width="116" height="55" rx="14" fill="var(--lp-surface)" stroke="var(--lp-border)" />
-                    <text className="lp-map-title" x="388" y="73" textAnchor="middle" fill="var(--lp-fg)" fontSize="15" fontWeight="650">
+                    <rect x="323" y="49" width="130" height="55" rx="14" fill="var(--lp-surface)" stroke="var(--lp-border)" />
+                    <text className="lp-map-title" x="388" y="73" textAnchor="middle" fill="var(--lp-fg)" fontSize="13" fontWeight="650">
                       {t("landing.hero.map.retrieve")}
                     </text>
                     <text className="lp-map-sub" x="388" y="92" textAnchor="middle" fill="var(--lp-text-subtle)" fontSize="10">
@@ -102,8 +103,8 @@ export function LandingHero() {
                     </text>
                   </g>
                   <g>
-                    <rect x="47" y="228" width="104" height="48" rx="14" fill="var(--lp-surface)" stroke="var(--lp-border-soft)" />
-                    <text className="lp-map-title" x="99" y="249" textAnchor="middle" fill="var(--lp-fg-2)" fontSize="14" fontWeight="650">
+                    <rect x="37" y="228" width="124" height="48" rx="14" fill="var(--lp-surface)" stroke="var(--lp-border-soft)" />
+                    <text className="lp-map-title" x="99" y="249" textAnchor="middle" fill="var(--lp-fg-2)" fontSize="12.5" fontWeight="650">
                       {t("landing.hero.map.forget")}
                     </text>
                     <text className="lp-map-sub" x="99" y="265" textAnchor="middle" fill="var(--lp-text-subtle)" fontSize="10">
@@ -111,8 +112,8 @@ export function LandingHero() {
                     </text>
                   </g>
                   <g>
-                    <rect x="339" y="226" width="104" height="48" rx="14" fill="var(--lp-surface)" stroke="var(--lp-border-soft)" />
-                    <text className="lp-map-title" x="391" y="247" textAnchor="middle" fill="var(--lp-fg-2)" fontSize="14" fontWeight="650">
+                    <rect x="329" y="226" width="124" height="48" rx="14" fill="var(--lp-surface)" stroke="var(--lp-border-soft)" />
+                    <text className="lp-map-title" x="391" y="247" textAnchor="middle" fill="var(--lp-fg-2)" fontSize="12.5" fontWeight="650">
                       {t("landing.hero.map.space")}
                     </text>
                     <text className="lp-map-sub" x="391" y="263" textAnchor="middle" fill="var(--lp-text-subtle)" fontSize="10">
