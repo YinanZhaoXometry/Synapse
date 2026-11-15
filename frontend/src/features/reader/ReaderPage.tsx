@@ -54,6 +54,7 @@ import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { previousNavPathname, sourceBackTarget } from "@/lib/nav-history";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useShellChrome } from "@/components/layout/shell-chrome";
 import { useViewportTier } from "@/hooks/use-mobile";
 import {
   apiErrorCode,
@@ -253,6 +254,15 @@ export default function ReaderPage() {
 
   const [panelChoice, setPanelChoice] = useState<boolean | null>(null);
   const [immersive, setImmersive] = useState(false);
+  // Immersive owns the whole viewport (owner bug round 2026-11-15): the shell
+  // chrome (sidebars, mobile header/bottom nav) stands down while immersive
+  // is on and comes back on exit — including the unmount cleanup, so
+  // navigating away mid-immersive never strands the shell hidden.
+  const { setChromeHidden } = useShellChrome();
+  useEffect(() => {
+    setChromeHidden(immersive);
+    return () => setChromeHidden(false);
+  }, [immersive, setChromeHidden]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState<number | null>(null);
   const flowRef = useRef<PdfFlowHandle | null>(null);
