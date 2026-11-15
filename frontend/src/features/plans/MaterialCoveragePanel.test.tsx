@@ -68,10 +68,12 @@ const MATERIAL: MaterialView = {
   ],
   createdAt: "2026-11-05T00:00:00Z",
   downloadUrl: null,
+  origin: "uploaded",
+  generation: null,
 };
 
 const NODES: KnowledgeNodeView[] = [
-  { id: "n-1", planId: "plan-1", taskId: null, stage: null, title: "Consensus", order: 0, description: null, optional: false, masteryScore: "0", state: "uncovered" },
+  { id: "n-1", planId: "plan-1", taskId: null, stage: null, title: "Consensus", order: 0, description: null, optional: false, studyMark: null, masteryScore: "0", state: "uncovered" },
 ];
 
 /** Wire-shaped fixture rows: the cache write needs __typename (Apollo normalization). */
@@ -99,11 +101,14 @@ const rejectMock = {
   result: { data: { rejectMappingProposals: { mappings: ROWS.filter((r) => r.id === "r-2" || r.id === "r-3").map(wire) } } },
 };
 
-function mount(mocks: MockedResponse[] = [mappingsMock, confirmMock, rejectMock, refetchMock]) {
+function mount(
+  mocks: MockedResponse[] = [mappingsMock, confirmMock, rejectMock, refetchMock],
+  props: { autoRunning?: boolean; capReached?: boolean; unmappedNodes?: number } = {},
+) {
   return render(
     <MockedProvider mocks={mocks}>
       <LanguageProvider>
-        <MaterialCoveragePanel material={MATERIAL} nodes={NODES} />
+        <MaterialCoveragePanel material={MATERIAL} nodes={NODES} {...props} />
       </LanguageProvider>
     </MockedProvider>,
   );
@@ -180,6 +185,44 @@ describe("MaterialCoveragePanel", () => {
     expect(screen.queryByText(zhDict["mapping.loadFailed"])).not.toBeInTheDocument();
   });
 
+  it("renders the computed unmapped-nodes summary line — the material-mapping axis, never the mastery wording", async () => {
+    mount(undefined, { unmappedNodes: 1 });
+    const summary = await screen.findByTestId("coverage-unmapped-summary");
+    expect(summary).toHaveTextContent(zhDict["mapping.unmappedNodesSummary"].replace("{n}", "1"));
+    // GLOSSARY Unmapped node: the summary line names 未映射节点 — the mastery
+    // axis's 未覆盖/uncovered vocabulary must never appear here.
+    expect(zhDict["mapping.unmappedNodesSummary"]).toContain("未映射节点");
+    expect(zhDict["mapping.unmappedNodesSummary"]).not.toContain("未覆盖");
+    expect(zhDict["mapping.unmappedNodesSummary"]).not.toContain("uncovered");
+  });
+
+  it("shows the auto-mapping running state (and holds the manual button) while the effect maps this material", async () => {
+    mount(
+      [{ request: { query: MaterialNodeMappingsDocument, variables: { materialId: "m-1" } }, result: { data: { materialNodeMappings: [] } } }],
+      { autoRunning: true },
+    );
+    await waitFor(() => expect(screen.getByTestId("coverage-auto-working")).toBeInTheDocument());
+    expect(screen.getByTestId("coverage-auto-working")).toHaveTextContent(zhDict["mapping.autoWorking"]);
+    // The honest empty state yields to the running line.
+    expect(screen.queryByText(zhDict["mapping.noMappings"])).not.toBeInTheDocument();
+    // The manual AI 映射 button stays present but waits for the auto run.
+    const manual = screen.getByRole("button", { name: zhDict["mapping.mapAction"] });
+    expect(manual).toBeDisabled();
+  });
+
+  it("renders the cap-exhausted state on a zero-row material — the manual button remains the explicit retry", async () => {
+    mount(
+      [{ request: { query: MaterialNodeMappingsDocument, variables: { materialId: "m-1" } }, result: { data: { materialNodeMappings: [] } } }],
+      { capReached: true },
+    );
+    await waitFor(() => expect(screen.getByTestId("coverage-cap")).toBeInTheDocument());
+    expect(screen.getByTestId("coverage-cap")).toHaveTextContent(zhDict["mapping.capExhausted"]);
+    // The honest empty state yields to the cap explanation.
+    expect(screen.queryByText(zhDict["mapping.noMappings"])).not.toBeInTheDocument();
+    // The manual action stays at all times (spec story 10).
+    expect(screen.getByRole("button", { name: zhDict["mapping.mapAction"] })).toBeEnabled();
+  });
+
   it("resolves a confirmed group's NEW node to its title — confirm sweeps the plan read, no uuid fallback", async () => {
     // Production wiring under test: the panel's nodes prop rides the plan
     // read (usePlanNodesQuery → PlanDocument); confirm must refetch that
@@ -193,7 +236,7 @@ describe("MaterialCoveragePanel", () => {
       stage: null,
       title,
       description: null,
-      optional: false,
+      optional: false, studyMark: null,
       order,
       masteryScore: "0",
       state: "uncovered",

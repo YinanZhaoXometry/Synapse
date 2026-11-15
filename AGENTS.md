@@ -13,10 +13,11 @@ Fresh restart repo (started from zero, Nov 2026). The previous BMad-era implemen
 ```
 frontend/  the Vite SPA — everything frontend
 backend/   the Rails 8.1 API-only service — see backend/AGENTS.md (its architecture contract)
+desktop/   the Electron shell (epic 38) — packages the SPA build; see desktop/README.md
 justfile  root orchestrator: just setup · dev · up · spec
 docs/     product/design/architecture/agents docs (stays at root)
 .scratch/ local issue tracker (stays at root)
-.github/  CI workflow(s) — web gates + api gates on push/PR to main
+.github/  CI workflow(s) — web gates + api gates on push/PR to main + desktop release on green merges to main
 ```
 
 ## Commands
@@ -30,6 +31,9 @@ just dev     # web Vite dev server (proxies /graphql to :3000 — bring the stac
 just up      # compose: postgres 17 + minio + api (api on port 3000)
 just migrate # db:migrate in the running api container — run after pulling migrations the stack booted before
 just spec    # web gates + api gates
+just desktop         # Electron dev shell (needs `just dev` running — loads the Vite server, zero CORS)
+just desktop-dist    # package the macOS dmg locally (SPA built against the deployed api; needs `cd desktop && npm ci` once)
+just desktop-release # publish a release: tags desktop-v<version> (bump desktop/package.json first) → CI builds + publishes it
 
 # Frontend gates (from frontend/ — two true invocation forms):
 # (sequence kept in sync with the justfile spec recipe + ci.yml web job)
@@ -62,7 +66,7 @@ Playwright e2e lives in `frontend/e2e/` (`just e2e` — one command: flips the b
 
 **`frontend/`** — the SPA:
 
-- `src/App.tsx` — all routes. `/` = `EntryGate` (first run → onboarding wizard; returning users → Plans Home, AD-8). Plan/task study flows nest under `AppLayout` (sidebar shell): `/plans`, `/plan/:id` (+ `/quiz`, `/flashcards`), `/task/new`, `/task/:id` (+ `/quiz`, `/flashcards`), `/read/:materialId`, plus the retained ten destinations (`/dashboard`, `/ai-tutor`, `/materials`, `/quiz`, `/flashcards`, `/mistakes`, `/planner`, `/achievements`, `/analytics`, `/settings`).
+- `src/App.tsx` — all routes. `/` = `EntryGate` (logged-out → the marketing landing in `src/features/landing/` (epic-37: Open-Design port, `lp-` namespaced, fixed warm palette, own lazy chunk + `landing.css`); token present → Plans Home — AD-8 amended 2026-11-15). Plan/task study flows nest under `AppLayout` (sidebar shell): `/plans`, `/plan/:id` (+ `/quiz`, `/flashcards`, `/notes/:noteId`), `/task/new`, `/task/:id` (+ `/quiz`, `/flashcards`), `/read/:materialId`, plus the retained ten destinations (`/dashboard`, `/ai-tutor`, `/materials`, `/quiz`, `/flashcards`, `/mistakes`, `/planner`, `/achievements`, `/analytics`, `/settings`).
 - `src/contexts/` — `LanguageProvider` → `ThemeProvider`, nested inside `ApolloProvider` + `TooltipProvider` in App.tsx. Consume via `useLanguage()` / `useTheme()` (hooks throw outside their provider). The translations table (`i18n-dictionary.ts`) lives beside them. (`UserProgressContext` was deleted in epic P2-09 T6 — the demo progress context's retirement completed there; domain data comes from the typed hooks layer, and the architecture grep-guard keeps the name dead.)
 - `src/apollo/` — the Apollo Client 4 seam (AD-18, epic P2-8): the client singleton (auth link + relative `/graphql` uri, dev-proxied to :3000), the `synapse-token` auth seam, and `resetApiClient()` (cache wipe + SSE terminators) — the ONE seam login/logout/account switches funnel through.
 - `src/api/` — the typed hooks layer: the ONLY route features touch domain data. `src/lib/graphql/*.graphql` operations → `npm run codegen` → committed `src/types/graphql.ts` (TypedDocumentNodes; CI regenerates + diffs — never edit the output). Hooks return mapped domain views; plans/nodes carry SERVER mastery fields (`masteryScore`, `state`) — rendering reads them, never recomputes (AD-14). Conventions live in `src/api/index.ts`'s header.
@@ -73,6 +77,8 @@ Playwright e2e lives in `frontend/e2e/` (`just e2e` — one command: flips the b
 - `src/lib/utils.ts` — `cn()` (clsx + tailwind-merge); use it for all conditional classes.
 
 **`backend/`** — the Rails 8.1 GraphQL service (minimal bootable scaffold: one `health` query, committed `schema.graphql`, RSpec + RuboCop green). Its architecture contract — command-layer-first, error enum, naming, what lands with which epic — is [`backend/AGENTS.md`](backend/AGENTS.md). Read it before any backend work.
+
+**`desktop/`** — the Electron shell (epic 38): `main.cjs` serves the staged SPA build (`frontend/dist` → `desktop/dist`) from the `app://synapse` privileged scheme; electron-builder packs dmg (arm64/x64) + NSIS exe, ad-hoc signed. The whole app integration is the build-time `VITE_API_URL` — zero product-code changes. Releases are **tag-driven** (owner amendment 2026-11-15, not per-merge): bump `desktop/package.json` version → `just desktop-release` pushes the `desktop-v<version>` tag → `.github/workflows/desktop-release.yml` builds and publishes the GitHub Release under that tag (tag↔package.json mismatch fails the release). Deploy dependency (owner ops): the deployed api's `CORS_ORIGIN` and the R2 bucket CORS must allow `app://synapse` — docs/deploy.md §12. macOS runs a hidden title bar (the sidebar is the drag region; immersive/pre-login surfaces carry a transparent drag strip). BYOK (epic 39 T2): GraphQL optional `provider {baseUrl model apiKey}` on every AI mutation (incl. the stream-ticket mint) routes the call through the caller's own OpenAI-compatible endpoint — their key, no shared DailyCap; the desktop Settings' model section (desktop-gated) stores it locally.
 
 ## Conventions
 
@@ -87,6 +93,7 @@ Playwright e2e lives in `frontend/e2e/` (`just e2e` — one command: flips the b
 - **`synapse-token`** (`src/apollo/auth-token.ts`) — the JWT; read by the Apollo auth link, written by login/logout (ticket 02). Server TTL is 24h; a stale token surfaces as UNAUTHENTICATED, never silently.
 - **`synapse-db:v1`** — the Phase-1 legacy document. NOT in the runtime anymore (the grep guard forbids reading/writing it outside `src/lib/local-document.ts`); it survives as the rollback substrate and ticket 03's first-login-import input — never deleted client-side.
 - **`synapse-import:done`** (`src/lib/import-offer.ts`) — the first-login import's one-time-offer marker (`"1"`): written on import success AND on "not now", so the offer never nags again. It is its own key — never the legacy document (that stays untouched above) and never a UI pref.
+- **`synapse-ai-config`** (`src/lib/model-config.ts`, epic 39) — the desktop shell's BYOK model config (`{baseUrl, modelName, apiKey}` JSON, possibly a partial draft). Lazy-written on save; deliberately NOT in the Settings reset list (the API key is user data, not a UI preference); never rides the wire unless complete (the apollo `providerOverrideLink` seam injects it into the ten AI mutations' `provider` input).
 - **`synapse-lang`** (`LanguageContext.tsx`), **`synapse-theme`** / **`synapse-mode`** / **`synapse-motion`** (`ThemeContext.tsx`) — UI prefs; theme palette id (`sunset` default), mode (`system` default), motion (`"on"`/`"off"` string; reduce-motion reads it as `=== "off"`).
 - All four UI keys are **lazy-written**: nothing is persisted on first load — the write happens inside the setter (`setLanguage`/`setTheme`/`setMode`/`setReduceMotion`), so a key exists in storage only after the user changes that setting once. Reads at provider init always fall back (lang `zh`, theme `sunset`, mode `system`, motion on).
 - There is **no `studyflow-lang`** anywhere in the code — the 2026-11-01 product rename moved the key to `synapse-lang` (commit `c07e669`) with no migration reading the old name. A `studyflow-lang` entry seen in a browser profile is orphaned pre-rename residue; nothing reads it.
@@ -99,7 +106,7 @@ Playwright e2e lives in `frontend/e2e/` (`just e2e` — one command: flips the b
 - **HMR error overlay is disabled** (`frontend/vite.config.ts`), so dev errors only appear in the terminal — watch it, not just the browser.
 - **Web dev server binds host `::` on port 8080** (not Vite's default 5173). The api serves on port 3000 (compose).
 - **`frontend/tsconfig.app.tsbuildinfo` / `frontend/tsconfig.node.tsbuildinfo` are committed** (policy unchanged — A6). Their contents are relative paths, so they survive the move; a stale one self-heals on the next `tsc -b` (regen verified byte-identical) — commit the regenerated file if a legit path change lands.
-- **CI** runs the same gates on GitHub Actions (push/PR to `main` and `epic/**`): web = `npm ci` → codegen (regenerate + diff — schema drift fails loudly) → `tsc -b` → eslint → vitest --coverage → `vite build` → mastery-vector anti-drift (regenerate + stamp-insensitive diff — same step `just spec` runs); api = rubocop → rspec (SimpleCov line floor lives in spec_helper); **e2e** (epic-17 T05) = compose demo stack + `compose.e2e.yaml` stub wiring → Playwright critical flows (retries 2 in CI, report/traces uploaded on failure). Keep local green before pushing.
+- **CI** runs the same gates on GitHub Actions (push/PR to `main` and `epic/**`): web = `npm ci` → codegen (regenerate + diff — schema drift fails loudly) → `tsc -b` → eslint → vitest --coverage → `vite build` → mastery-vector anti-drift (regenerate + stamp-insensitive diff — same step `just spec` runs); api = rubocop → rspec (SimpleCov line floor lives in spec_helper); **e2e** (epic-17 T05) = compose demo stack + `compose.e2e.yaml` stub wiring → Playwright critical flows (retries 2 in CI, report/traces uploaded on failure). Keep local green before pushing. Separately, **Desktop Release** (`desktop-release.yml`, epic 38) is tag-driven: a pushed `desktop-v<version>` tag builds mac+win and publishes the GitHub Release; PRs touching `desktop/**` and manual dispatches are build-only.
 - `backend/README.md` is still the Rails generator stub — the backend's real doc is `backend/AGENTS.md`.
 - ~~`lovable-tagger`~~ — the Lovable-scaffold residue was REMOVED 2026-11-06 (debt batch: devDependency + the dev-mode `componentTagger` Vite plugin + lockfile regen); `vite.config.ts` now carries only `react()`.
 

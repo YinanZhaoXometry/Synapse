@@ -49,22 +49,35 @@ import {
   PanelRightOpen,
   RotateCw,
   Upload,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { previousNavPathname, sourceBackTarget } from "@/lib/nav-history";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useShellChrome } from "@/components/layout/shell-chrome";
 import { useViewportTier } from "@/hooks/use-mobile";
 import {
   apiErrorCode,
   apiErrorKeys,
   newClientUuid,
+  addAnnotationListUpdate,
+  buildAddAnnotationOptimistic,
+  buildClaimSectionOptimistic,
+  buildRemoveAnnotationOptimistic,
+  buildUnclaimSectionOptimistic,
+  claimSectionListUpdate,
+  newOptimisticAnnotationId,
+  newOptimisticMarkingId,
+  removeAnnotationListUpdate,
   useAddAnnotationMutation,
   useAnnotationsQuery,
   useClaimSectionMutation,
   useGenerateStudyFocusMutation,
   useMaterialNodeMappingsQuery,
   useMaterialQuery,
+  usePlanMaterialsQuery,
   usePlanQuery,
   useReadingProgressQuery,
   useRemoveAnnotationMutation,
@@ -75,7 +88,7 @@ import {
 import type { ErrorLike } from "@apollo/client";
 import { sessionBlobs } from "@/lib/session-blobs";
 import { CompanionPanel, type AskPrefill } from "@/features/companion/CompanionPanel";
-import { CompanionOverlay, CompanionSheet } from "./companion-surfaces";
+import { CompanionFloat, CompanionOverlay, CompanionSheet } from "./companion-surfaces";
 import { cn } from "@/lib/utils";
 import type { Annotation, ReadingLocator } from "@/domain/entities";
 import { PARSE_REASON_MESSAGE_KEY } from "./parse";
@@ -92,6 +105,11 @@ import { QuickTestFlow } from "./quick-test-flow";
 import { quickTestGate } from "./quick-test-gate";
 import { dispatchQuickTest } from "./quick-test-seam";
 import { markingQuickTestScope, openClaimsBySection } from "./marking";
+import LessonFlow from "./lesson-flow";
+import { lessonRows } from "./lesson-display";
+import { useLessonStream } from "./use-lesson-stream";
+import { STREAM_TERMINAL_KEYS } from "@/ai/sse-client";
+import type { ApiErrorCode } from "@/api/errors";
 import { SelectionBar, SELECTION_BAR_HEIGHT, SELECTION_BAR_WIDTH } from "./selection-bar";
 import { barAnchor, captureSelection, MAX_SELECTION_CHARS, type CapturedSelection } from "./selection-capture";
 import {
@@ -161,18 +179,33 @@ export default function ReaderPage() {
     [markingsQuery.data, openBySection],
   );
 
-  // Claim when unclaimed, unmark when claimed. Success stays silent — the
-  // green arriving via the read-back sweep IS the feedback; failure toasts
-  // honestly (sonner, AD-9).
+  // Claim when unclaimed, unmark when claimed — OPTIMISTICALLY (owner bug
+  // round 2026-11-15): the green lands on the click. The claim paints a temp
+  // full-shape row (the list update hands it to the server row on the
+  // response); the unmark paints the same cached row with clearedAt set.
+  // Success stays silent (the optimistic paint IS the feedback); a wire
+  // failure clears the optimistic layer and toasts honestly (sonner, AD-9).
   const handleToggleClaim = useCallback(
     (sectionId: string) => {
       if (!material) return;
-      const unmarking = openBySection.has(sectionId);
-      const mutate = unmarking ? unclaimSectionMutation : claimSectionMutation;
-      void mutate({
-        variables: { input: { materialId: material.id, sectionId } },
-        onError: () => toast.error(t(unmarking ? "marking.unmarkFailed" : "marking.claimFailed")),
-      });
+      const open = openBySection.get(sectionId);
+      if (open !== undefined) {
+        // The mapped view row IS the raw row's contract fields (id, materialId,
+        // sectionId, claimedAt) — no fragment read needed for the paint.
+        void unclaimSectionMutation({
+          variables: { input: { materialId: material.id, sectionId } },
+          optimisticResponse: buildUnclaimSectionOptimistic(open, new Date().toISOString()),
+          onError: () => toast.error(t("marking.unmarkFailed")),
+        });
+      } else {
+        const tempId = newOptimisticMarkingId();
+        void claimSectionMutation({
+          variables: { input: { materialId: material.id, sectionId } },
+          optimisticResponse: buildClaimSectionOptimistic(material.id, sectionId, tempId, new Date().toISOString()),
+          update: claimSectionListUpdate(material.id, tempId),
+          onError: () => toast.error(t("marking.claimFailed")),
+        });
+      }
     },
     [material, openBySection, claimSectionMutation, unclaimSectionMutation, t],
   );
@@ -223,8 +256,59 @@ export default function ReaderPage() {
     });
   }, [material, generateStudyFocusMutation, language, t]);
 
+  // ── AI 讲义 (epic-36 T2): the reader IS the generation progress face ────
+  // A lesson material (generation present) renders LessonFlow; ordinary
+  // materials never enter this branch (generation is null for uploads —
+  // their code path below is untouched by construction). The stream hook
+  // owns the SSE op: outline/section landings sweep the material read (the
+  // server's atomic writes ARE the render truth), the terminal toasts
+  // through the closed enum (cap included — a cap mid-lesson ALSO lands
+  // pausedKind on the row, which the banner reads after the sweep).
+  const lessonStream = useLessonStream(materialId ?? "", {
+    refetchMaterial: () => materialQuery.refetch(),
+    onTerminal: (code) => {
+      const key = STREAM_TERMINAL_KEYS[code as ApiErrorCode] ?? "ai.stream.failed";
+      toast.error(t(key));
+    },
+  });
+  // The source-anchor labels resolve 《材料名》· §title off the plan's FULL
+  // material rows (the summary list carries no sections) — the read runs
+  // ONLY on a lesson page (empty id skips it otherwise).
+  const lessonSourceMaterialsQuery = usePlanMaterialsQuery(
+    material?.generation && material.planId ? material.planId : "",
+  );
+
   const [panelChoice, setPanelChoice] = useState<boolean | null>(null);
   const [immersive, setImmersive] = useState(false);
+  // Immersive owns the whole viewport (owner bug round 2026-11-15): the shell
+  // chrome (sidebars, mobile header/bottom nav) stands down while immersive
+  // is on and comes back on exit — including the unmount cleanup, so
+  // navigating away mid-immersive never strands the shell hidden.
+  const { setChromeHidden } = useShellChrome();
+  useEffect(() => {
+    setChromeHidden(immersive);
+    return () => setChromeHidden(false);
+  }, [immersive, setChromeHidden]);
+  // The immersive Companion float (owner bug round 2026-11-15): pill ⇄ float
+  // card over the immersive reading. Leaving immersive resets to the pill —
+  // re-entering starts collapsed (the reading comes first); `floatStreaming`
+  // drives the pill's pulse while a reply streams behind the collapsed card.
+  const [floatExpanded, setFloatExpanded] = useState(false);
+  const [floatStreaming, setFloatStreaming] = useState(false);
+  const handleFloatStreaming = useCallback((streaming: boolean) => setFloatStreaming(streaming), []);
+  useEffect(() => {
+    if (!immersive) setFloatExpanded(false);
+  }, [immersive]);
+  // PDF zoom (owner bug round 2026-11-15): fit-width is no longer the only
+  // size — a discrete ladder over fit-width, stepped by the top-bar controls
+  // and rendered by PdfPageFlow through the width seam. 1 = fit-width.
+  const [pdfZoom, setPdfZoom] = useState(1);
+  const PDF_ZOOM_MIN = 0.5;
+  const PDF_ZOOM_MAX = 3;
+  const zoomIn = () =>
+    setPdfZoom((z) => Math.min(PDF_ZOOM_MAX, Math.round((z + 0.25) * 100) / 100));
+  const zoomOut = () =>
+    setPdfZoom((z) => Math.max(PDF_ZOOM_MIN, Math.round((z - 0.25) * 100) / 100));
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState<number | null>(null);
   const flowRef = useRef<PdfFlowHandle | null>(null);
@@ -286,13 +370,20 @@ export default function ReaderPage() {
         setAnnotationsPanelOpen(false);
         return;
       }
+      // The immersive float joins the chain ahead of the ladder surfaces —
+      // its card collapses to the pill first; the next Escape leaves
+      // immersive entirely.
+      if (immersive && floatExpanded) {
+        setFloatExpanded(false);
+        return;
+      }
       const floating = tier === "tablet" || tier === "mobile";
       if (floating && panelOpen) setPanelChoice(false);
       else if (immersive) setImmersive(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tier, panelOpen, immersive, selectionBar, annotationsPanelOpen, focusPanelOpen]);
+  }, [tier, panelOpen, immersive, floatExpanded, selectionBar, annotationsPanelOpen, focusPanelOpen]);
 
   // Stored progress (FR-10): the restore target when no anchor asks for one.
   // The flows mount only once this query has settled (gate below), so the
@@ -470,8 +561,11 @@ export default function ReaderPage() {
 
   // The chips' handler: re-capture the LIVE selection (the bar kept it
   // alive through the click — the mousedown suppression), build the AD-2
-  // range through the engine's capture seam, and persist. The read-back
-  // sweep re-applies; the bar closes (the selection's job is done).
+  // range through the engine's capture seam, and persist — OPTIMISTICALLY
+  // (owner bug round 2026-11-15): the highlight paints on the click, the
+  // round-trip + read-back sweep run invisibly behind it, and a wire failure
+  // rolls the paint back with an honest toast (AD-9). The bar closes (the
+  // selection's job is done).
   const handleAnnotate = useCallback(
     (kind: AnnotationKind, color: AnnotationColor | null) => {
       const zone = materialZoneRef.current;
@@ -493,10 +587,24 @@ export default function ReaderPage() {
         captured.kind === "pdf"
           ? { page: range.page, start: range.start, end: range.end, quote: range.quote }
           : { sectionId: range.sectionId, start: range.start, end: range.end, quote: range.quote };
+      const tempId = newOptimisticAnnotationId();
       void addAnnotationMutation({
         variables: {
           input: { materialId: current.id, locator: locatorInput, range: rangeInput, kind, color: color ?? undefined, body: "" },
         },
+        optimisticResponse: buildAddAnnotationOptimistic(
+          {
+            materialId: current.id,
+            locator: { kind: locatorInput.kind, page: locatorInput.page ?? null, sectionId: locatorInput.sectionId ?? null },
+            range: rangeInput,
+            kind,
+            color,
+            body: "",
+          },
+          tempId,
+          new Date().toISOString(),
+        ),
+        update: addAnnotationListUpdate(current.id, tempId),
         onError: () => toast.error(t("reader.annotationAddFailed")),
       });
     },
@@ -505,8 +613,18 @@ export default function ReaderPage() {
 
   const handleRemoveAnnotation = useCallback(
     (id: string) => {
+      const materialId = materialRef.current?.id;
       void removeAnnotationMutation({
         variables: { id },
+        // The optimistic evict (owner bug round 2026-11-15): the mark is gone
+        // on the click; the sweep confirms. Without the materialId there is no
+        // list to update — fire bare (the read-back carries the removal).
+        ...(materialId
+          ? {
+              optimisticResponse: buildRemoveAnnotationOptimistic(id),
+              update: removeAnnotationListUpdate(materialId, id),
+            }
+          : {}),
         onError: () => toast.error(t("reader.annotationRemoveFailed")),
       });
     },
@@ -562,6 +680,47 @@ export default function ReaderPage() {
     // The mutation is a stable hook contract (same shape as Plan Home's usage).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [materialId, parseState, hasBytes]);
+
+  // The ONE-SHOT stream-now command (epic-36 T2): the node lesson's create
+  // flow navigates here with ?generate=1 — the explicit commitment. The
+  // reader consumes it exactly once (stripped like ?hl=1 — a refresh never
+  // re-streams), and only over a loaded lesson row (no auto-resume without
+  // the command — spec decision 9: returning to a half-done lesson shows the
+  // honest 继续 posture instead).
+  const generateRequested = searchParams.get("generate") === "1";
+  const autoStreamedRef = useRef(false);
+  const materialLoaded = material !== undefined;
+  useEffect(() => {
+    if (!generateRequested || !materialLoaded) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("generate");
+    setSearchParams(next, { replace: true });
+    if (autoStreamedRef.current) return;
+    autoStreamedRef.current = true;
+    if (material?.generation) lessonStream.start(false);
+    // One consume per mount; the stream command is stable per lesson.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generateRequested, materialLoaded]);
+
+  // The regenerate one-shot command (epic-36 T3): the HUB's 重新生成 carries
+  // the strong confirm itself (the reader's exact copy keys) and navigates
+  // here with ?regenerate=1 — the same consume-once discipline as ?generate=1
+  // above, but dispatching lessonStream.start(true): the server resets the
+  // row in place and re-fills every chapter against the CURRENT sources, each
+  // call re-counted against the cap (T2's regenerate semantics, verbatim).
+  const regenerateRequested = searchParams.get("regenerate") === "1";
+  const autoRegeneratedRef = useRef(false);
+  useEffect(() => {
+    if (!regenerateRequested || !materialLoaded || generateRequested) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("regenerate");
+    setSearchParams(next, { replace: true });
+    if (autoRegeneratedRef.current) return;
+    autoRegeneratedRef.current = true;
+    if (material?.generation) lessonStream.start(true);
+    // One consume per mount; the stream command is stable per lesson.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regenerateRequested, materialLoaded]);
 
   // Re-upload (FR-29 relaxed; the epic-2 contract): fresh session bytes for the
   // SAME material — metadata and extracted sections stay the row's truth — and
@@ -685,6 +844,39 @@ export default function ReaderPage() {
                   <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
                 </button>
                 <span className="w-px h-4 bg-border" aria-hidden="true" />
+                {/* Zoom (owner bug round 2026-11-15): − / percent / + with the
+                    percent click resetting to fit-width. The flow restores
+                    the relative scroll position across the reflow. */}
+                <button
+                  type="button"
+                  onClick={zoomOut}
+                  aria-label={t("reader.zoomOutAria")}
+                  disabled={pdfZoom <= PDF_ZOOM_MIN}
+                  data-testid="pdf-zoom-out"
+                  className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-[var(--glass-2)] disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPdfZoom(1)}
+                  aria-label={t("reader.zoomResetAria")}
+                  data-testid="pdf-zoom-reset"
+                  className="font-display font-semibold tabular-nums text-[13px] px-1 min-w-[44px] text-center rounded-md hover:text-foreground hover:bg-[var(--glass-2)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {Math.round(pdfZoom * 100)}%
+                </button>
+                <button
+                  type="button"
+                  onClick={zoomIn}
+                  aria-label={t("reader.zoomInAria")}
+                  disabled={pdfZoom >= PDF_ZOOM_MAX}
+                  data-testid="pdf-zoom-in"
+                  className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-[var(--glass-2)] disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+                <span className="w-px h-4 bg-border" aria-hidden="true" />
               </>
             )}
             <IconToggle
@@ -746,6 +938,33 @@ export default function ReaderPage() {
             ) : (
               <ReuploadCard onReupload={() => fileInputRef.current?.click()} />
             )
+          ) : material.generation ? (
+            // The AI 讲义 face (epic-36 T2): the outline placeholders + live
+            // stream + pause banner + source lines. The marking/annotation
+            // props ride through unchanged — a ready section IS a material
+            // section (no special-casing anywhere).
+            <LessonFlow
+              material={material}
+              rows={lessonRows(material.generation, material.sections, {
+                activeSectionId: lessonStream.activeSectionId,
+                streamText: lessonStream.streamText,
+              })}
+              streaming={lessonStream.streaming}
+              activeSectionId={lessonStream.activeSectionId}
+              streamText={lessonStream.streamText}
+              sourceMaterials={lessonSourceMaterialsQuery.data}
+              onResume={() => lessonStream.start(false)}
+              onRegenerate={() => lessonStream.start(true)}
+              annotations={annotationItems}
+              introSectionId={introSectionId}
+              staleTitle={t("reader.annotationStale")}
+              onAnnotationsApplied={handleAnnotationsApplied}
+              onRemoveAnnotation={handleRemoveAnnotation}
+              claimedSectionIds={claimedSectionIds}
+              onToggleClaim={claimedSectionIds === undefined ? undefined : handleToggleClaim}
+              onConfirmQuiz={claimedSectionIds === undefined ? undefined : handleConfirmQuiz}
+              quickTestGate={quickTestGateState}
+            />
           ) : material.kind === "markdown" ? (
             // Markdown branch (FR-9): the full document from the session
             // bytes; the byteless post-reload contract is the re-upload card,
@@ -782,6 +1001,7 @@ export default function ReaderPage() {
               <PdfPageFlow
                 ref={flowRef}
                 blob={sessionBlobs.get(material.id)}
+                zoom={pdfZoom}
                 initialPage={anchor.page ?? storedPdfPage}
                 flashTarget={anchor.highlight}
                 onPageChange={handlePageChange}
@@ -870,6 +1090,57 @@ export default function ReaderPage() {
           </CompanionSheet>
         )}
 
+        {/* The immersive float (owner bug round 2026-11-15): the Companion
+            follows the reader into immersion — pill ⇄ floating glass card
+            (tablet/desktop) or pill ⇄ sheet (mobile), no docked column, no
+            scrim. Collapsing keeps the panel mounted (minimize, not abandon),
+            so a reply streams on behind the pill; the ladder surfaces above
+            own the non-immersive arrangement again on exit. */}
+        {immersive && tier !== "mobile" && (
+          <CompanionFloat
+            label={t("companion.title")}
+            expandLabel={t("reader.companionFloatOpenAria")}
+            collapseLabel={t("reader.companionFloatCollapseAria")}
+            streaming={floatStreaming}
+            expanded={floatExpanded}
+            onExpandedChange={setFloatExpanded}
+            variant="card"
+          >
+            <CompanionPanel
+              materialId={material.id}
+              material={material}
+              positionRef={currentPositionRef}
+              displayLocator={displayLocator}
+              onJumpToLocator={jumpToLocator}
+              selectionRef={pendingSelectionRef}
+              askPrefill={askPrefill}
+              onStreamingChange={handleFloatStreaming}
+            />
+          </CompanionFloat>
+        )}
+        {immersive && tier === "mobile" && (
+          <CompanionFloat
+            label={t("companion.title")}
+            expandLabel={t("reader.companionFloatOpenAria")}
+            collapseLabel={t("reader.companionCloseAria")}
+            streaming={floatStreaming}
+            expanded={floatExpanded}
+            onExpandedChange={setFloatExpanded}
+            variant="sheet"
+          >
+            <CompanionPanel
+              materialId={material.id}
+              material={material}
+              positionRef={currentPositionRef}
+              displayLocator={displayLocator}
+              onJumpToLocator={jumpToLocator}
+              selectionRef={pendingSelectionRef}
+              askPrefill={askPrefill}
+              onStreamingChange={handleFloatStreaming}
+            />
+          </CompanionFloat>
+        )}
+
         {/* The selection shortcuts bar (FR-13): floats beside the live
             selection, viewport-clamped; gone on scroll/collapse/Escape. The
             快测 action carries the Quick Test gate (T2, AD-6): only a landed
@@ -939,7 +1210,7 @@ export default function ReaderPage() {
           type="button"
           onClick={() => setImmersive(false)}
           aria-label={t("reader.immersiveOffAria")}
-          className="fixed top-3 right-3 z-20 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[var(--glass-5)] border border-border-soft shadow-raised text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+          className="desktop-no-drag fixed top-3 right-3 z-20 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[var(--glass-5)] border border-border-soft shadow-raised text-xs text-muted-foreground hover:text-foreground cursor-pointer"
         >
           <Minimize2 className="w-3.5 h-3.5" aria-hidden="true" />
         </button>

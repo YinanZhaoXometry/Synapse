@@ -57,6 +57,8 @@ const materialFixture = {
   sections,
   createdAt: "2026-11-01T00:00:00Z",
   downloadUrl: null,
+  origin: "uploaded" as const,
+  generation: null,
 };
 
 const planNodesFixture = [
@@ -67,7 +69,7 @@ const planNodesFixture = [
     title: "测试节点",
     stage: "foundations" as const,
     description: null,
-    optional: false,
+    optional: false, studyMark: null,
     order: 0,
     masteryScore: "0",
     state: "uncovered" as const,
@@ -235,7 +237,7 @@ const recordEvidenceMock = {
               id: NODE_ID,
               title: "测试节点",
               description: null,
-              optional: false,
+              optional: false, studyMark: null,
               stage: "foundations",
               order: 0,
               masteryScore: "50",

@@ -50,6 +50,8 @@ const material = (overrides: Partial<MaterialView>): MaterialView => ({
   ],
   createdAt: "2026-11-05T00:00:00Z",
   downloadUrl: null,
+  origin: "uploaded",
+  generation: null,
   ...overrides,
 });
 
@@ -184,6 +186,10 @@ describe("node-state i18n namespace", () => {
     "plans.nodeJumpMenuAria",
     "plans.nodeQuickTest",
     "plans.nodeQuickTestAria",
+    "plans.nodeTeachAction",
+    "plans.nodeTeachAria",
+    "plans.nodeTeachPrefill",
+    "companion.teachBadge",
     "quiz.nodeContext",
     "quiz.nodeContextNote",
   ];
@@ -192,6 +198,13 @@ describe("node-state i18n namespace", () => {
     for (const key of keys) {
       expect(zhDict[key], `zh missing ${key}`).toBeTruthy();
       expect(enDict[key], `en missing ${key}`).toBeTruthy();
+    }
+  });
+
+  it("epic-34 T2: the retired ask-AI keys are gone (the node-level 问 AI 导师 is retired)", () => {
+    for (const key of [ "plans.askAiAction", "plans.askAiAria", "plans.companionAskDraft" ]) {
+      expect(zhDict[key], `zh still carries retired ${key}`).toBeUndefined();
+      expect(enDict[key], `en still carries retired ${key}`).toBeUndefined();
     }
   });
 });

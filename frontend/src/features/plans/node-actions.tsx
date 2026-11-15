@@ -1,20 +1,27 @@
 /**
  * The node click-through actions (FR-7, epic P2-10 T3 — T4 folds the roadmap
- * graph's detail onto the SAME implementation): the study link (one confirmed
- * mapping), the jump menu (several, listed BY TITLE), and the always-reachable
- * node Quick Test secondary. ONE implementation for every node-shaped surface
- * — the PlanHome tree row and the graph detail sheet render this verbatim.
+ * graph's detail onto the SAME implementation; epic-34 T2 replaces the old
+ * mapping-gated 「问 AI 导师」 reader jump with the ALWAYS-rendered 「AI 讲解」
+ * teaching entry): the study link (one confirmed mapping), the jump menu
+ * (several, listed BY TITLE), the always-reachable node Quick Test secondary,
+ * and the always-reachable teach action — it opens the plan Companion drawer
+ * through the plan page shell (onTeach) with a short prefill the user sends
+ * themselves (no silent AI spend), mapped or not (GLOSSARY AI 讲解: never
+ * mapping-gated). ONE implementation for every node-shaped surface — the
+ * PlanHome tree row and the graph's hover strip + detail sheet render this
+ * verbatim.
  *
  * The targets ride the REAL anchor builders (AD-8, node-state.ts consumed
  * verbatim). In flight (`targets` null, `failed` false) there is no honest
- * action to show; a failed read falls back to the always-valid Quick Test
- * (the row never renders with NO click-through). HONEST SCOPING (ticket
- * Comments): node-scoped quiz GENERATION lands with T5's node_scope.
+ * study/quiz action to show; a failed read falls back to the always-valid
+ * Quick Test (the row never renders with NO click-through). HONEST SCOPING
+ * (ticket Comments): node-scoped quiz GENERATION lands with T5's node_scope.
  */
 import { Link } from "react-router-dom";
-import { BookOpen, ListChecks } from "lucide-react";
+import { BookOpen, BookText, ListChecks, MessageCircle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { nodePrimaryAction, nodeQuickTestHref, type NodeJumpTarget, type NodePrimaryAction } from "./node-state";
 
 const ACTION_CLASS =
@@ -26,12 +33,27 @@ export default function NodeActions({
   planId,
   nodeId,
   nodeTitle,
+  onTeach,
+  lessonMaterialId = null,
+  lessonHint = null,
+  onLesson,
 }: {
   targets: NodeJumpTarget[] | null;
   failed: boolean;
   planId: string;
   nodeId: string;
   nodeTitle: string;
+  /** The AI 讲解 entry: the plan page shell opens its Companion drawer. */
+  onTeach: (nodeId: string, nodeTitle: string) => void;
+  /** epic-36 T2 (生成讲义): the node's existing lesson id (the server's
+   * per-node singleton, mirrored by nodeLessonMaterial) — present → the
+   * action deforms into 「打开讲义」. */
+  lessonMaterialId?: string | null;
+  /** The composed cost hint (estimate × remaining cap); null while either
+   * read is in flight — no guessed numbers. */
+  lessonHint?: string | null;
+  /** The lesson entry's click: the shell creates (or opens) and navigates. */
+  onLesson?: (nodeId: string, nodeTitle: string) => void;
 }) {
   const { t } = useLanguage();
   const quickTestHref = nodeQuickTestHref(planId, nodeId);
@@ -41,6 +63,27 @@ export default function NodeActions({
       ? { kind: "quiz", href: quickTestHref }
       : null;
   const quickTestAria = t("plans.nodeQuickTestAria", { node: nodeTitle });
+
+  // The 生成讲义 entry (epic-36 T2): INDEPENDENT of AI 讲解, rendered whenever
+  // the shell wires onLesson. The mapped verdict rides the SAME targets read
+  // the study action uses: mapped → clickable (+ the estimate/cap hint),
+  // unmapped → disabled with the honest reason ALWAYS visible (the mapping
+  // dependency shown, never a silent wall); in-flight/failed → disabled with
+  // no verdict faked. An existing lesson deforms the action into 「打开讲义」
+  // (enabled — opening costs nothing new, the mapping verdict is moot).
+  const hasLesson = typeof lessonMaterialId === "string" && lessonMaterialId.length > 0;
+  const lessonClickable = !!targets && targets.length > 0;
+  // The sibling copy: mapped → the cost hint (absent while the estimate/cap
+  // reads load — never guessed); unmapped → the honest reason; in-flight or
+  // failed → NOTHING (no verdict is known — a reason here would be a lie);
+  // existing lesson → nothing (an open action costs nothing new).
+  const lessonHintText = hasLesson
+    ? null
+    : targets === null
+      ? null
+      : lessonClickable
+        ? lessonHint
+        : t("plans.nodeLessonUnmapped");
 
   return (
     <>
@@ -85,6 +128,44 @@ export default function NodeActions({
             </div>
           </PopoverContent>
         </Popover>
+      )}
+      {/* The AI 讲解 teaching entry (epic-34 T2): opens the plan Companion
+          drawer pre-filled with the short teaching ask — PREFILL ONLY, the
+          user presses send. ALWAYS rendered (no mapping gate — every node,
+          mapped or unmapped, has a way to start learning it); the retired
+          action here was the mapping-gated 「问 AI 导师」 reader jump. */}
+      <button
+        type="button"
+        onClick={() => onTeach(nodeId, nodeTitle)}
+        aria-label={t("plans.nodeTeachAria", { node: nodeTitle })}
+        data-testid="node-teach"
+        className={ACTION_CLASS}
+      >
+        <MessageCircle className="w-3 h-3" aria-hidden="true" /> {t("plans.nodeTeachAction")}
+      </button>
+      {/* The 生成讲义 entry (epic-36 T2, GLOSSARY AI 讲义): one click turns the
+          node's confirmed mapped sections into a studyable lesson and lands in
+          the reader. Disabled states carry their reason as a visible sibling
+          (the hint testid) — never tooltip-only honesty. */}
+      {onLesson && (
+        <>
+          <button
+            type="button"
+            onClick={hasLesson || lessonClickable ? () => onLesson(nodeId, nodeTitle) : undefined}
+            disabled={!hasLesson && !lessonClickable}
+            aria-label={hasLesson ? t("plans.nodeLessonOpenAria", { node: nodeTitle }) : t("plans.nodeLessonAria", { node: nodeTitle })}
+            data-testid="node-lesson"
+            className={cn(ACTION_CLASS, !hasLesson && !lessonClickable && "opacity-40 pointer-events-none")}
+          >
+            <BookText className="w-3 h-3" aria-hidden="true" />{" "}
+            {hasLesson ? t("plans.nodeLessonOpen") : t("plans.nodeLessonAction")}
+          </button>
+          {lessonHintText && (
+            <span data-testid="node-lesson-hint" className="flex-none text-[10px] text-muted-foreground">
+              {lessonHintText}
+            </span>
+          )}
+        </>
       )}
       {action && (
         <Link

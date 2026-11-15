@@ -12,17 +12,23 @@
 module Ai
   # The reply-language vocabulary (AD-16: one language parameter, one policy
   # — every AI surface, mutations and streams alike, takes one of these and
-  # is prompted to answer in it).
-  LANGUAGES = %w[zh en].freeze
+  # is prompted to answer in it). "zh-TW" (owner bug round 2026-11-15) is the
+  # traditional-Chinese UI locale riding the same one-parameter policy — the
+  # frontend's dictionary adds the third column and the directive names the
+  # script (繁體中文) through Ai::Prompts.language_word.
+  LANGUAGES = %w[zh en zh-TW].freeze
 
   # The stream-op vocabulary (AD-16, ticket 04 — the ticket contract): the
-  # three streamed surfaces. "companion" = position-grounded study chat on a
+  # streamed surfaces. "companion" = position-grounded study chat on a
   # material; "proposal" = the plan-creation chat's staged proposal (the
   # transcript is ephemeral per AD-5 — only the confirmed plan persists,
   # via the existing confirmProposal flow); "plan_companion" = the plan-scope
   # chat (FR-46, epic P2-12 T3 — no ReadingPosition, the plan grounding
-  # carries it, with the optional mistake-entry input).
-  STREAM_OPS = %w[companion proposal plan_companion].freeze
+  # carries it, with the optional mistake-entry input); "lesson" = the
+  # generated-lesson section fill (epic-36 T1, spec decisions 5+6 — resume
+  # semantics: ready sections skip, each completed section persists
+  # atomically).
+  STREAM_OPS = %w[companion proposal plan_companion lesson].freeze
 
   # The stream-ticket TTL (AD-16: "opaque single-use secret, TTL ~60s").
   # Read from ENV at call time; garbage falls back to the default.
@@ -36,8 +42,10 @@ module Ai
   # Command-layer doctrine (AD-12/AD-16): the AI commands (app/commands/ai/)
   # are deliberately NOT idempotent, unlike the delta-3 creates — every call
   # is a NEW generation, and the per-user daily cap bounds retries (FR-34).
-  # The one exception is generateQuiz's client_uuid: the session uuid keeps
-  # the delta-3 replay semantics (a same-user replay returns the existing
-  # session WITHOUT a provider call — a network-timeout retry never spends
-  # twice).
+  # The exceptions are the replay-before-spend commands, where a network-time
+  # retry could otherwise double-spend a row: generateQuiz's client_uuid (the
+  # session uuid — a same-user replay returns the existing session WITHOUT a
+  # provider call) and createLesson's client_uuid (epic-36 — the row id IS
+  # the uuid; a same-user replay returns the existing lesson untouched, ②'s
+  # outline call included).
 end

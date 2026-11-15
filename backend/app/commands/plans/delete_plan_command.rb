@@ -7,7 +7,8 @@ module Plans
   # nodes have no life outside it, and neither do its materials". The server
   # adds the sweeps the ER's foreign keys mandate before those rows can go —
   # the evidence/mistake/question/quiz-session graph (AD-6 attribution),
-  # flashcards, annotations, and section markings. Phase-1 leaves those
+  # flashcards, annotations, section markings, and the materials' auto-mapping
+  # rows (material_node_mappings). Phase-1 leaves those
   # dangling client-side; Postgres forbids it server-side, so the cascade is
   # deeper here, not narrower. Every sweep runs through the owner's
   # association path (kickoff delta 2), and a foreign or unknown id is
@@ -88,6 +89,13 @@ module Plans
         current_user.section_markings.where(material_id: material_ids).delete_all
         current_user.reading_progresses.where(material_id: material_ids).delete_all
         current_user.chat_threads.where(material_id: material_ids).delete_all
+        # The materials' auto-mapping rows (FR-45) reference BOTH the nodes
+        # and the materials going away — the sweep their deletion mandates
+        # (owner bug round 2026-11-15: the FKs blew up on the unswept rows).
+        current_user.material_node_mappings
+          .where(node_id: node_ids)
+          .or(current_user.material_node_mappings.where(material_id: material_ids))
+          .delete_all
         current_user.quiz_sessions.where(id: session_ids + promoted_session_ids).delete_all
         current_user.study_tasks.where(id: promoted_task_ids).delete_all
         current_user.knowledge_nodes.where(id: node_ids).delete_all

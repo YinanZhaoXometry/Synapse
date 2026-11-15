@@ -46,6 +46,39 @@ RSpec.describe Ai::Prompts do
     end
   end
 
+  # epic-34 T1's single point: EVERY builder's reply-language line comes from
+  # one directive helper — uniform application is the property under test
+  # (a builder growing its own hand-written language line would drift).
+  it "applies the language directive uniformly on every builder (zh | en)" do
+    zh_calls = {
+      quiz: { mode: "open", language: "zh", context: context },
+      flashcards: { language: "zh", context: context },
+      mapping: { language: "zh", context: context },
+      note: { language: "zh", context: context },
+      study_focus: { language: "zh", context: context },
+      today_suggestion: { language: "zh", candidates: [] },
+      grade: { answer: "My answer.", keywords: %w[k], source_text: "Raft elects a leader.", language: "zh" },
+      companion: { question: "为什么？", position_text: "I am here.", language: "zh", escalated: false, context: context },
+      plan_companion: { question: "重点？", language: "zh", context: context },
+      proposal: { message: "m", materials: [], language: "zh" },
+      lesson_outline: { language: "zh", context: context, material_title: "讲义" },
+      lesson_section: { language: "zh", context: context, lesson_title: "Raft 讲义", chapter_title: "选举" }
+    }
+    aggregate_failures do
+      zh_calls.each do |name, kwargs|
+        content = described_class.public_send(name, **kwargs)[1][:content]
+        expect(content).to include("in 简体中文."), "#{name} lacks the zh language directive"
+      end
+
+      en_calls = zh_calls.to_h { |name, kwargs| [ name, kwargs.except(:language).merge(language: "en") ] }
+      en_calls.each do |name, kwargs|
+        content = described_class.public_send(name, **kwargs)[1][:content]
+        expect(content).to include("in English."), "#{name} lacks the en language directive"
+        expect(content).not_to include("简体中文"), "#{name} leaked the zh directive on an en call"
+      end
+    end
+  end
+
   it "states the mode rule for open, choice, and mix" do
     open = described_class.quiz(mode: "open", language: "zh", context: context)[1][:content]
     choice = described_class.quiz(mode: "choice", language: "zh", context: context)[1][:content]
@@ -86,6 +119,13 @@ RSpec.describe Ai::Prompts do
       described_class::NOTE_MARKER_KINDS.each { |kind| expect(plain).to include("\"#{kind}\"") }
       expect(plain).to include("Reply ONLY with the Markdown note itself")
       expect(plain).not_to include("Weak-spot coverage plan")
+      # The teaching directives (epic-35 T03): intuition-first, a worked
+      # example with a sanity check, and the renderer-honesty representation
+      # line (no LaTeX / diagram-syntax — the client renders neither).
+      expect(plain).to include("Teach, don't summarize")
+      expect(plain).to include("sanity check of the result")
+      expect(plain).to include("LaTeX source and diagram-syntax blocks are never rendered")
+      expect(plain).to include("State plainly when the material is ambiguous")
     end
 
     aimed = described_class.note(language: "zh", context: context, quota_plan: "- Node Y: heavy")[1][:content]
@@ -113,6 +153,37 @@ RSpec.describe Ai::Prompts do
       expect(plan).to include("Stay hint-first")
       expect(plan).to include("cite them inline")
       expect(plan).to include("never JSON")
+    end
+  end
+
+  # Node teaching (epic-34 T2, AI 讲解): the optional teach_node directive —
+  # names the node being taught; with no usable confirmed mapping the
+  # honesty clause rides (say no material is attached, point to
+  # upload/mapping, never teach from parametric memory). The directive
+  # travels as the assembler's TeachingNode struct (review round), never a
+  # bare hash. Absent teach_node keeps the prompt free of the directive
+  # (the generic plan companion, byte-neutral).
+  it "adds the node-teaching directive to plan_companion only when a teach node rides" do
+    plain = described_class.plan_companion(question: "重点？", language: "zh", context: context)[1][:content]
+    mapped = described_class.plan_companion(
+      question: "请给我讲解这个节点", language: "zh", context: context,
+      teach_node: Ai::ContextAssembler::TeachingNode.new(title: "Raft 选举", unmapped: false)
+    )[1][:content]
+    unmapped = described_class.plan_companion(
+      question: "请给我讲解这个节点", language: "zh", context: context,
+      teach_node: Ai::ContextAssembler::TeachingNode.new(title: "Raft 选举", unmapped: true)
+    )[1][:content]
+    aggregate_failures do
+      expect(plain).not_to include("TEACHES the node")
+      expect(plain).not_to include("no material is attached")
+      expect(mapped).to include("TEACHES the node")
+      expect(mapped).to include("Raft 选举")
+      # the honesty clause is the unmapped node's clause, never a mapped turn's
+      expect(mapped).not_to include("no material is attached")
+      expect(unmapped).to include("TEACHES the node")
+      expect(unmapped).to include("no material is attached")
+      expect(unmapped).to include("upload")
+      expect(unmapped).to include("NEVER teach the node from your own knowledge")
     end
   end
 
@@ -213,5 +284,47 @@ RSpec.describe Ai::Prompts do
     a = described_class.quiz(mode: "mix", language: "en", context: context, quota_plan: "- N: 2")
     b = described_class.quiz(mode: "mix", language: "en", context: context, quota_plan: "- N: 2")
     expect(a).to eq(b)
+  end
+
+  # The generated-lesson prompts (epic-36 T1, spec decisions 7+8): the
+  # outline gate (①) and the single-pass section fill. The load-bearing
+  # contract: the sourcing law + the honesty clause (只讲所给源材料 — the
+  # lesson is a grounded re-presentation, never parametric writing), the
+  # chapter id vocabulary the reply normalization reads, the chapter cap the
+  # template pins, and the language directive riding the ONE single point.
+  describe "the lesson prompts (epic-36 T1)" do
+    it "lesson_outline keeps the sourcing law, the [section id=…] vocabulary, and the template cap" do
+      content = described_class.lesson_outline(language: "en", context: context,
+                                               material_title: "Distributed notes")[1][:content]
+      aggregate_failures do
+        expect(content).to include("the ONLY allowed source")
+        expect(content).to include("Distributed notes")
+        expect(content).to include("sourceSectionIds")
+        expect(content).to include("At most #{Ai::Lessons::MATERIAL_MAX_SECTIONS} chapters")
+        expect(content).to include("never invent content or ids")
+        expect(content).to include('{"chapters":[{"title":"…","sourceSectionIds":["…"]}]}')
+        expect(content).to include("in English.")
+      end
+    end
+
+    it "lesson_section keeps the single-chapter honesty clause and the Markdown streaming contract" do
+      content = described_class.lesson_section(language: "zh", context: context,
+                                               lesson_title: "Raft 讲义", chapter_title: "选举")[1][:content]
+      aggregate_failures do
+        expect(content).to include("the ONLY allowed source")
+        expect(content).to include("选举")
+        expect(content).to include("Raft 讲义")
+        expect(content).to include("never parametric writing")
+        expect(content).to include("never state a fact the context does not ground")
+        expect(content).to include("Reply ONLY with the chapter Markdown itself")
+        expect(content).to include("in 简体中文.")
+      end
+    end
+
+    it "honors a caller-pinned outline target (the node variant's tighter template)" do
+      content = described_class.lesson_outline(language: "zh", context: context, material_title: "讲义",
+                                               outline_target: Ai::Lessons::NODE_SECTION_MAX)[1][:content]
+      expect(content).to include("At most #{Ai::Lessons::NODE_SECTION_MAX} chapters")
+    end
   end
 end

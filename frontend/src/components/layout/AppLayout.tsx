@@ -12,6 +12,9 @@ import UserMenuButton from "@/components/shared/UserMenuButton";
 import { useSessionIdentity } from "@/components/shared/session-identity";
 import { recordNavPathname } from "@/lib/nav-history";
 import { NAV_GROUPS, NAV_ROUTES, SETTINGS_ROUTE, flatNav, mobileNavPaths } from "@/components/layout/nav-items";
+import SidebarPlanTree from "@/components/layout/SidebarPlanTree";
+import { ShellChromeProvider } from "./shell-chrome";
+import { isMacDesktopShell } from "@/lib/desktop";
 import { cn } from "@/lib/utils";
 
 const mobileNav = mobileNavPaths
@@ -53,6 +56,11 @@ export default function AppLayout() {
   const { reduceMotion } = useTheme();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // The shell-chrome seam (shell-chrome.tsx): a route (the reader's immersive
+  // mode) asks the shell to stand down while it owns the viewport. The four
+  // chrome surfaces below render conditionally off this flag; the provider
+  // hands the setter to the routed children.
+  const [chromeHidden, setChromeHidden] = useState(false);
 
   // Swipe-to-close on the mobile drawer (epic-20 T2, spec decision 5 —
   // hand-rolled pointer math on this panel, NO vaul). `swipeRef` freezes the
@@ -196,11 +204,32 @@ export default function AppLayout() {
   // No bg on this shell — body carries the cream canvas + 3 radial gradient blobs
   // (prototype .app is transparent; the sidebar is frosted glass over them).
   return (
+    <ShellChromeProvider value={{ chromeHidden, setChromeHidden }}>
     <div className="flex h-screen overflow-hidden">
-      {/* Full sidebar (lg+) */}
-      <aside className="hidden lg:flex w-[264px] flex-col gap-2 glass-panel border-r px-3 pt-3.5 pb-3" aria-label={t("common.navAria")}>
-        {/* Brand */}
-        <div className="flex items-center gap-2.5 px-2 pt-1.5 pb-3.5 border-b border-border-soft">
+      {/* macOS hidden title bar (epic 39 T1): immersive mode unmounts every
+          chrome surface, so a transparent top strip keeps the window
+          draggable while the reader owns the viewport. */}
+      {isMacDesktopShell && chromeHidden && <div className="desktop-drag-strip" aria-hidden="true" />}
+      {/* Full sidebar (lg+) — chromeHidden unmounts it (immersive reading).
+          Desktop-mac: the sidebar IS the title bar (drag region; interactive
+          descendants opt out via .desktop-drag-region CSS). */}
+      {!chromeHidden && (
+      <aside
+        className={cn(
+          "hidden lg:flex w-[264px] flex-col gap-2 glass-panel border-r px-3 pt-3.5 pb-3",
+          // desktop-mac: the brand row shares its line with the traffic
+          // lights (center y ≈ 23) — tighten the stacked top paddings so the
+          // logo centers on them instead of floating below.
+          isMacDesktopShell && "desktop-drag-region !pt-[2px]"
+        )}
+        aria-label={t("common.navAria")}
+      >
+        {/* Brand — the spacer clears the macOS traffic lights (same row). */}
+        <div className={cn(
+          "flex items-center gap-2.5 px-2 pt-1.5 pb-3.5 border-b border-border-soft",
+          isMacDesktopShell && "!pt-0"
+        )}>
+          {isMacDesktopShell && <span className="w-[60px] shrink-0" aria-hidden="true" />}
           <img src="/logo.png" alt="" aria-hidden="true" className="w-[34px] h-[34px] rounded-[11px] shadow-brand shrink-0" />
           <span className="flex flex-col leading-tight min-w-0">
             <span className="font-display font-semibold text-xl tracking-tight text-foreground">Synapse</span>
@@ -211,7 +240,9 @@ export default function AppLayout() {
         {/* Command-bar search pill (Northstar ⌘K) */}
         <div className="pt-1">{searchPill}</div>
 
-        {/* Grouped nav (scaffold navGroups restored — owner round 2026-11-02) */}
+        {/* Grouped nav (scaffold navGroups restored — owner round 2026-11-02).
+            The 学习 group carries the plan records tree (epic-33 T1): the
+            sidebar holds the user's recent plans, not just page links. */}
         <nav className="flex-1 pt-1 pb-2 overflow-y-auto" aria-label={t("common.primaryAria")}>
           {NAV_GROUPS.map(group => (
             <div key={group.labelKey} className="pt-2">
@@ -221,6 +252,7 @@ export default function AppLayout() {
               <div className="space-y-0.5">
                 {group.items.map(item => renderLink(item))}
               </div>
+              {group.labelKey === "nav.group.learn" && <SidebarPlanTree />}
             </div>
           ))}
         </nav>
@@ -238,8 +270,10 @@ export default function AppLayout() {
           </div>
         </div>
       </aside>
+      )}
 
-      {/* Icon rail (md–lg) */}
+      {/* Icon rail (md–lg) — chromeHidden unmounts it */}
+      {!chromeHidden && (
       <aside className="hidden md:flex lg:hidden w-16 flex-col items-center glass-panel border-r">
         <div className="flex items-center justify-center py-4 w-full border-b border-border-soft">
           <img src="/logo.png" alt="" aria-hidden="true" className="w-8 h-8 rounded-[9px] shadow-brand" />
@@ -294,9 +328,11 @@ export default function AppLayout() {
           </Tooltip>
         </div>
       </aside>
+      )}
 
       {/* Mobile header + main + bottom nav */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        {!chromeHidden && (
         <header className="md:hidden flex items-center justify-between px-3 h-14 glass-mobile-bar border-b">
           <div className="flex items-center gap-2">
             <button
@@ -327,6 +363,7 @@ export default function AppLayout() {
             )}
           </div>
         </header>
+        )}
         <main className="flex-1 overflow-y-auto">
           {/* ONE boundary around the Outlet covers every in-shell lazy page:
               a failed dynamic import (dev "Outdated Optimize Dep" 504, prod
@@ -337,6 +374,7 @@ export default function AppLayout() {
           </RouteErrorBoundary>
         </main>
 
+        {!chromeHidden && (
         <nav className="md:hidden flex items-center justify-around glass-bottom-nav border-t py-1.5 px-2" aria-label={t("common.primaryAria")}>
           {mobileNav.map(item => {
             const isActive = location.pathname === item.to;
@@ -355,6 +393,7 @@ export default function AppLayout() {
             );
           })}
         </nav>
+        )}
       </div>
 
       {/* Mobile drawer (prototype body.side-open): off-canvas sidebar + scrim */}
@@ -425,6 +464,9 @@ export default function AppLayout() {
                 <div className="space-y-0.5">
                   {group.items.map(item => renderLink(item, () => setDrawerOpen(false)))}
                 </div>
+                {group.labelKey === "nav.group.learn" && (
+                  <SidebarPlanTree onNavigate={() => setDrawerOpen(false)} />
+                )}
               </div>
             ))}
           </nav>
@@ -445,5 +487,6 @@ export default function AppLayout() {
 
       <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} />
     </div>
+    </ShellChromeProvider>
   );
 }

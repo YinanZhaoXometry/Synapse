@@ -8,12 +8,17 @@
  * contract — this stub matches on their stable opening lines):
  *   - plan proposal  → the frozen <outline>/<proposal> tag contract, echoing
  *     the topic the prompt carried — the fixed 16-node roadmap proposal
- *     (epic-16 wire shape, one deliberately invalid backward edge; see
+ *     (epic-16 wire shape; one backward edge the server drops + cross-stage
+ *     pairs the spine era withholds from rendering; see
  *     proposalReply below).
  *   - quiz           → {"questions":[…]} citing REAL ids regexed out of the
  *     assembled context ([material id=…], [section id=…], [node id=…]) — the
  *     server's normalization would drop questions citing ids the context does
  *     not carry, so fabrication here would fail loudly, not silently.
+ *   - lesson outline (epic-36) → {"chapters":[{title, sourceSectionIds}]} —
+ *     the real section ids split deterministically into two chapters.
+ *   - lesson section fill (epic-36) → the chapter Markdown (## heading +
+ *     recap), title regexed out of the prompt.
  *   - anything else  → a plain-text reply; an unexpected AI surface fails its
  *     downstream JSON parse (INTERNAL) instead of being silently faked.
  *
@@ -118,6 +123,11 @@ const STUB_PROPOSAL_EDGES = [
   ["图的表示", "并查集"], // S2→S3
   ["动态规划入门", "高频题精练"], // S3→S4
   ["手写代码训练", "模拟面试复盘"], // S3→S4
+  // Two SAME-STAGE pairs — the spine era (epic-28 feedback round): cross-stage
+  // pairs are withheld from the rendering (the spine carries inter-stage
+  // ordering), so these are the only two that draw brackets.
+  ["排序算法", "堆与优先队列"], // S2→S2
+  ["高频题精练", "模拟面试复盘"], // S4→S4
   // The one invalid pair: backward (S4 → S1) — the server drops it.
   ["模拟面试复盘", "复杂度分析"],
 ];
@@ -143,12 +153,91 @@ function proposalReply(text) {
   return [...outline, "<proposal>", JSON.stringify(proposal), "</proposal>"].join("\n");
 }
 
+/**
+ * The mapping reply: {"mappings":[{sectionId, nodeId, proposedNodeTitle}]}
+ * — one entry per real `[section id=…]` regexed out of the assembled
+ * mapping context, all pointing at the FIRST `[node id=…]` there (the stub
+ * proposal's first node, 复杂度分析). The backend's normalize_targets drops
+ * anything unusable, so a missed id costs a section its proposal, not the
+ * contract.
+ */
+function mappingReply(text) {
+  const sectionIds = [...text.matchAll(/\[section id=(.+?)[\]\s]/g)].map((match) => match[1]);
+  const nodeId = (text.match(/\[node id=(.+?)[\]\s]/) ?? [])[1];
+  if (sectionIds.length === 0 || !nodeId) {
+    return "Stub could not find section/node ids in the mapping context.";
+  }
+  return JSON.stringify({
+    mappings: sectionIds.map((sectionId) => ({ sectionId, nodeId, proposedNodeTitle: null })),
+  });
+}
+
+/**
+ * The lesson outline reply (epic-36 T3 — the ① propose gate AND ②'s internal
+ * outline call share the `Prompts.lesson_outline` shape): {"chapters":[…]}
+ * — the real `[section id=…]` values regexed out of the assembled context,
+ * split deterministically into TWO chapters (a head chapter and a tail
+ * chapter; a single-section context collapses honestly to one chapter with
+ * that section). The server's outline normalizer drops chapters citing ids
+ * the context does not carry, so fabrication would fail loudly, not silently.
+ */
+function lessonOutlineReply(text) {
+  const sectionIds = [...text.matchAll(/\[section id=(.+?)[\]\s]/g)].map((match) => match[1]);
+  if (sectionIds.length === 0) {
+    return "Stub could not find section ids in the lesson outline context.";
+  }
+  const unique = [...new Set(sectionIds)];
+  const split = Math.ceil(unique.length / 2);
+  const chapters = [{ title: "基础梳理", sourceSectionIds: unique.slice(0, split) }];
+  if (unique.length > split) {
+    chapters.push({ title: "要点深化", sourceSectionIds: unique.slice(split) });
+  }
+  return JSON.stringify({ chapters });
+}
+
+/**
+ * The lesson section fill reply (epic-36 T3 — the stream op's per-chapter
+ * `Prompts.lesson_section` shape): the chapter Markdown itself, opening with
+ * the level-2 heading the prompt asks for and closing with the recap line —
+ * the chapter title is regexed out of the prompt (the server echoes it into
+ * the outline status flip, so a missed match would still land a usable
+ * body, just generically titled).
+ */
+function lessonSectionReply(text) {
+  const chapterTitle = (text.match(/writing the chapter "(.+?)" of/) ?? [])[1] ?? "本章";
+  return [
+    `## ${chapterTitle}`,
+    "",
+    "本小节是对来源材料对应小节的重新组织：stub 确定性内容，用于验证讲义生成链路的端到端行为。",
+    "",
+    "- 要点一：讲义严格来自学习者上传的材料，不做无依据的展开。",
+    "- 要点二：每小节完成后立即落盘，断线重开只补缺失部分。",
+    "",
+    "小结：本小节覆盖了来源小节的核心内容，可通过来源行跳回原文核对。",
+  ].join("\n");
+}
+
 function replyFor(messages) {
   const lastUser = [...messages].reverse().find((message) => message.role === "user");
   const text = lastUser?.content ?? "";
 
   if (text.startsWith("Design a study plan.")) return proposalReply(text);
   if (text.includes("quiz questions")) return quizReply(text);
+  // Section mapping (epic P2-10's AI map run — epic-34 T3 makes it
+  // auto-fired, so the creation-with-file flow hits it unprompted): the
+  // mapping prompt's stable instruction line is the contract matched here.
+  // Every real section id rides out pointing at the plan's FIRST node — the
+  // server normalizes (unknown sections dropped, hallucinated node ids would
+  // land Unmapped), so fabrication would fail loudly, not silently.
+  if (text.includes("Map EVERY [section id=")) return mappingReply(text);
+  // Lesson outline (epic-36): the stable instruction line of
+  // Prompts.lesson_outline — JSON chapters citing real section ids.
+  if (text.includes("Propose a chapter outline for an AI-generated study lesson")) {
+    return lessonOutlineReply(text);
+  }
+  // Lesson section fill (epic-36): the per-chapter Markdown request —
+  // matched on the lesson-writing sentence no other prompt carries.
+  if (text.includes("of the generated study lesson")) return lessonSectionReply(text);
   return "Stub reply.";
 }
 

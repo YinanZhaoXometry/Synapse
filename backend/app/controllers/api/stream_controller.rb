@@ -13,10 +13,28 @@ module Api
   #
   # The event vocabulary IS the frozen contract (ticket 04's ## Comments —
   # epic-08's client consumes it verbatim):
-  #   event: rung      data: {"intent":"explain","rung":"hint|answer","canEscalate":bool,"language":"zh|en"}
-  #   event: token     data: {"text":"…"}                      (many, in order)
-  #   event: citation  data: {"locator":{...},"quote":null}    (companion only)
-  #   event: terminal  data: {"code":"OK"} | {"code":"<enum>"} (+ "proposal":{...} for the proposal op)
+  #   event: rung           data: {"intent":"explain","rung":"hint|answer","canEscalate":bool,"language":"zh|en"}
+  #   event: token          data: {"text":"…"}                      (many, in order)
+  #   event: citation       data: {"locator":{...},"quote":null}    (companion only)
+  #   event: terminal       data: {"code":"OK"} | {"code":"<enum>"} (+ "proposal":{...} for the proposal op)
+  # epic-36 T1 adds the lesson op's vocabulary (spec decision 6 — the
+  # generated-lesson section fill; the event list per connection):
+  #   event: outline_ready  data: {"outline":[{id,title,anchors,status}]}  (always first — the
+  #                         current outline, generated in-stream when the row has none)
+  #   event: section_start  data: {"sectionId":"…","title":"…"}     (per pending chapter)
+  #   event: token          data: {"text":"…"}                      (the chapter's single-pass stream)
+  #   event: section_ready  data: {"sectionId":"…"}                 (the chapter just persisted atomically)
+  #   event: terminal       data: {"code":"OK"} | CAP_REACHED | INTERNAL | NOT_FOUND
+  # Resume semantics (the DeepTutor posture on our SSE contract): ready
+  # sections SKIP on a re-opened ticket (重开=只补欠账), each completed
+  # section persists ATOMICALLY (断线不留半句 — a drop never leaves half a
+  # section), CAP_REACHED / provider failure land pausedKind on the lesson
+  # (cap | provider) with the generated sections preserved, and there is no
+  # auto-resume — continuing = an explicit new ticket. The ticket payload's
+  # regenerate flag (epic-36 T2) is the reader's 「重新生成」: one in-place
+  # reset (sections cleared + outline emptied on the SAME row) before the
+  # normal flow re-derives the outline from the current grounding and
+  # re-fills every section.
   # The rung is request-derived server-side (escalated → "answer", else
   # "hint" — the ladder amendment); citations are derived from the grounded
   # position (the focus section) — the AD-5 contract is produced here, never
@@ -34,12 +52,18 @@ module Api
 
       write_sse_headers
       payload = redeemed.payload
+      # BYOK (epic 39 T2): the ticket may carry a provider override minted
+      # through CreateStreamTicketCommand — the caller's own endpoint pays
+      # every streamed call below (no shared cap).
+      override = Ai::ProviderOverride.from_payload(payload["provider"]) if payload["provider"].is_a?(Hash)
       if redeemed.op == "proposal"
-        stream_proposal(user, payload)
+        stream_proposal(user, payload, override)
       elsif redeemed.op == "plan_companion"
-        stream_plan_companion(user, payload)
+        stream_plan_companion(user, payload, override)
+      elsif redeemed.op == "lesson"
+        stream_lesson(user, payload, override)
       else
-        stream_companion(user, payload)
+        stream_companion(user, payload, override)
       end
     rescue StandardError => e
       # Headers may or may not be out yet — try the terminal event, then
@@ -92,8 +116,8 @@ module Api
     # or the typed Failure value (INTERNAL for transport faults — the cap
     # trips BEFORE any enumerator exists, so CAP_REACHED arrives as a
     # Failure too).
-    def stream_to_tokens(user, messages, on_delta)
-      result = Ai::Provider.stream(user: user, messages: messages)
+    def stream_to_tokens(user, messages, on_delta, override = nil)
+      result = Ai::Provider.stream(user: user, messages: messages, override: override)
       if result.failure?
         # The failure paths are silent on the wire by contract (terminal
         # enum only) — the log is the only diagnosability (2026-11-10: two
@@ -111,7 +135,7 @@ module Api
       end
     end
 
-    def stream_companion(user, payload)
+    def stream_companion(user, payload, override = nil)
       material = user.materials.find_by(id: payload["material_id"])
       return terminal(code: "NOT_FOUND") unless material
 
@@ -134,7 +158,7 @@ module Api
         context: context
       )
       failure = catch(:client_gone) do
-        stream_to_tokens(user, messages, ->(delta) { sse("token", { "text" => delta }) })
+        stream_to_tokens(user, messages, ->(delta) { sse("token", { "text" => delta }) }, override)
       end
       return if failure == :client_gone
       return terminal(code: failure.code) if failure.is_a?(ApplicationErrors::Failure)
@@ -152,7 +176,14 @@ module Api
     # rides the mistake entry's OWN source locator (AD-5: citations are
     # derived server-side, never guessed); with no mistake entry there is no
     # single grounded locator, so no citation event rides.
-    def stream_plan_companion(user, payload)
+    # epic-34 T2 (AI 讲解): when the ticket carried node_id, the grounding
+    # switches to the node assembly (ContextAssembler.node_grounding — the
+    # single node + its confirmed mapped sections) and the prompt gains the
+    # teaching directive with the assembler's unmapped honesty flag. The
+    # node wins the grounding (the teaching turn is about the node); the
+    # mistake citation still rides when an entry came along — the two inputs
+    # are orthogonal, and the citation is about the entry, not the ground.
+    def stream_plan_companion(user, payload, override = nil)
       plan = user.study_plans.find_by(id: payload["plan_id"])
       return terminal(code: "NOT_FOUND") unless plan
 
@@ -160,6 +191,12 @@ module Api
       if payload["mistake_entry_id"]
         mistake_entry = user.mistake_entries.find_by(id: payload["mistake_entry_id"])
         return terminal(code: "NOT_FOUND") unless mistake_entry
+      end
+
+      node = nil
+      if payload["node_id"]
+        node = user.knowledge_nodes.find_by(id: payload["node_id"], plan_id: plan.id)
+        return terminal(code: "NOT_FOUND") unless node
       end
 
       language = payload["language"]
@@ -170,14 +207,22 @@ module Api
         "language" => language
       })
 
-      context = Ai::ContextAssembler.plan_grounding(plan, mistake_entry: mistake_entry)
+      if node
+        grounding = Ai::ContextAssembler.node_grounding(plan, node)
+        teach_node = Ai::ContextAssembler::TeachingNode.new(title: node.title, unmapped: grounding.unmapped)
+        context = grounding
+      else
+        context = Ai::ContextAssembler.plan_grounding(plan, mistake_entry: mistake_entry)
+        teach_node = nil
+      end
       messages = Ai::Prompts.plan_companion(
         question: payload["question"].to_s,
         language: language,
-        context: context
+        context: context,
+        teach_node: teach_node
       )
       failure = catch(:client_gone) do
-        stream_to_tokens(user, messages, ->(delta) { sse("token", { "text" => delta }) })
+        stream_to_tokens(user, messages, ->(delta) { sse("token", { "text" => delta }) }, override)
       end
       return if failure == :client_gone
       return terminal(code: failure.code) if failure.is_a?(ApplicationErrors::Failure)
@@ -188,7 +233,210 @@ module Api
       terminal(code: "OK")
     end
 
-    def stream_proposal(user, payload)
+    # The generated-lesson stream (epic-36 T1, spec decisions 5+6+9 — the
+    # reader's live section fill): outline_ready first (the current outline,
+    # generated in-stream when the row carries none), then every PENDING
+    # chapter as section_start → token* → section_ready, then terminal.
+    # Ownership is the row lookup itself (user-scoped find — a foreign or
+    # vanished lesson answers NOT_FOUND). Resume semantics: ready sections
+    # SKIP (重开=只补欠账); each completed section persists ATOMICALLY with
+    # its outline status flip (one row update — 断线不留半句: a drop leaves
+    # no half section, and the partial call's cost was already paid, AD-16);
+    # CAP_REACHED pauses with everything generated preserved (pausedKind=cap)
+    # and provider failures pause with pausedKind=provider, both carrying the
+    # code on terminal; there is NO auto-resume — continuing is an explicit
+    # new ticket, whose mint clears the pause banner server-side.
+    def stream_lesson(user, payload, override = nil)
+      lesson = user.materials.find_by(id: payload["lesson_id"])
+      return terminal(code: "NOT_FOUND") unless lesson && lesson.generated? && lesson.generation.is_a?(Hash)
+
+      language = payload["language"]
+      generation = lesson.generation
+      outline = generation["outline"].is_a?(Array) ? generation["outline"] : []
+
+      # 重新生成 (epic-36 T2, spec story 5): the reader's explicit in-place
+      # replace — one row, one reset: sections cleared and the outline
+      # emptied so the EMPTY-outline path below re-derives it from the
+      # CURRENT grounding (new mappings picked up; the outline call plus
+      # every section fill re-counts against the cap — 重烧额度). Before
+      # outline_ready, so the event carries the fresh placeholder set.
+      if payload["regenerate"] == true && outline.present?
+        lesson.update!(
+          sections: [],
+          generation: generation.merge("outline" => [], "pausedKind" => nil)
+        )
+        generation = lesson.reload.generation
+        outline = []
+      end
+
+      if outline.empty?
+        outcome = generate_lesson_outline(user, lesson, language, override)
+        return outcome[1] if outcome[0] == :fail
+
+        outline = outcome[1]
+      elsif generation["pausedKind"]
+        # The explicit resume attempt clears the pause (the reader's banner
+        # reads this jsonb — a new ticket is the only way back).
+        lesson.update!(generation: generation.merge("pausedKind" => nil))
+      end
+
+      sse("outline_ready", { "outline" => outline })
+
+      failure_code = catch(:client_gone) do
+        outcome = nil
+        outline.each_with_index do |chapter, index|
+          next if chapter["status"] == "ready"
+
+          outcome = stream_lesson_section(user, lesson, outline, index, chapter, language, override)
+          break unless outcome.nil?
+        end
+        outcome
+      end
+      return if failure_code == :client_gone
+      return terminal(code: failure_code) if failure_code
+
+      terminal(code: "OK")
+    end
+
+    # ONE chapter's single-pass fill: stream the section prompt's tokens as
+    # they arrive (token events + accumulation), then persist ATOMICALLY —
+    # the sections array append and the outline status flip in ONE row
+    # update, so the reader never sees a half section. Failures pause the
+    # lesson (pausedKind) and surface as the terminal code.
+    def stream_lesson_section(user, lesson, outline, index, chapter, language, override = nil)
+      sse("section_start", { "sectionId" => chapter["id"], "title" => chapter["title"] })
+
+      context = lesson_section_context(user, chapter)
+      messages = Ai::Prompts.lesson_section(language: language, context: context,
+                                            lesson_title: lesson.title, chapter_title: chapter["title"])
+      result = Ai::Provider.stream(user: user, messages: messages, override: override)
+      return pause_and_code(lesson, result.failure) if result.failure?
+
+      text = +""
+      begin
+        result.value!.each do |delta|
+          text << delta
+          sse("token", { "text" => delta })
+        end
+      rescue Ai::ProviderError => e
+        Rails.logger.warn("[ai] lesson stream transport failure: #{e.message[0, 200]}")
+        return pause_and_code(lesson, ApplicationErrors::Failure.new(code: :INTERNAL, context: { message: e.message }))
+      end
+
+      body = text.strip
+      if body.empty?
+        return pause_and_code(lesson, ApplicationErrors::Failure.new(
+          code: :INTERNAL, context: { message: "ai lesson section reply was empty" }
+        ))
+      end
+
+      generation = lesson.generation.dup
+      new_outline = generation["outline"].dup
+      new_outline[index] = new_outline[index].merge("status" => "ready")
+      lesson.update!(
+        sections: Array(lesson.sections) + [
+          { "id" => chapter["id"], "title" => chapter["title"], "text" => body, "anchors" => chapter["anchors"] }
+        ],
+        generation: generation.merge("outline" => new_outline)
+      )
+      sse("section_ready", { "sectionId" => chapter["id"] })
+      nil
+    end
+
+    # The chapter's grounding: ONLY its assigned anchor sections, resolved
+    # against the owner's UPLOADED materials (deleted sources drop honestly;
+    # a generated lesson never grounds a lesson — the engine's origin filter,
+    # spec decision 8 — and the prompt's honesty clause keeps the model from
+    # inventing over a gap).
+    def lesson_section_context(user, chapter)
+      pairs = Array(chapter["anchors"]).filter_map do |anchor|
+        material = user.materials.where(origin: "uploaded").find_by(id: anchor["materialId"])
+        section = material && Ai::ContextAssembler.section_by_id(material, anchor["sectionId"])
+        next unless material && section
+
+        [ material, section ]
+      end
+      Ai::ContextAssembler.lesson_section_grounding(pairs)
+    end
+
+    # 无 outline 先出 (spec decision 6): the in-stream outline generation for
+    # a lesson row without placeholders. ONE cap-counted call, grounded per
+    # variant (node → the node grounding; material → the source's own
+    # sections), normalized through the SAME functions the create paths use,
+    # placeholders persisted before the first section streams. Returns
+    # [:ok, outline] or [:fail, terminal_code] (the failure paths pause the
+    # lesson first).
+    def generate_lesson_outline(user, lesson, language, override = nil)
+      generation = lesson.generation
+      messages =
+        if generation["variant"] == Ai::Lessons::VARIANT_NODE
+          node = user.knowledge_nodes.find_by(id: lesson.node_id)
+          return [ :fail, "NOT_FOUND" ] unless node
+
+          # The ENGINE grounding (spec decision 8's 后端半边): the node's
+          # confirmed rows MINUS generated lessons — a lesson never feeds a
+          # lesson. The teaching path (epic-34's AI 讲解) keeps the unfiltered
+          # node_teaching_mappings; the engine filters at its own read.
+          grounding = Ai::ContextAssembler.node_grounding(
+            node.plan, node, mappings: Ai::Lessons.node_engine_rows(node)
+          )
+          return [ :fail, "NOT_FOUND" ] if grounding.unmapped
+
+          Ai::Prompts.lesson_outline(language: language, context: grounding, material_title: lesson.title,
+                                     outline_target: Ai::Lessons::NODE_SECTION_MAX)
+        else
+          source = user.materials.find_by(id: Array(generation["sourceMaterialIds"]).first)
+          return [ :fail, "NOT_FOUND" ] unless source
+
+          Ai::Prompts.lesson_outline(language: language, context: Ai::ContextAssembler.material_scope(source),
+                                     material_title: source.title)
+        end
+
+      result = Ai::Provider.complete(user: user, messages: messages, override: override)
+      return [ :fail, pause_and_code(lesson, result.failure) ] if result.failure?
+
+      chapters =
+        if generation["variant"] == Ai::Lessons::VARIANT_NODE
+          node = user.knowledge_nodes.find_by(id: lesson.node_id)
+          Ai::Lessons.normalize_node_outline(result.value!, node)
+        else
+          source = user.materials.find_by(id: Array(generation["sourceMaterialIds"]).first)
+          # The material variant's chapters carry only sourceSectionIds (the
+          # shared normalizer's reply shape) — the anchors are minted HERE,
+          # server-side, mirroring the node branch: without them the section
+          # fills ground on nothing and the persisted sections carry
+          # anchors: [] (the reader's source lines would vanish).
+          Ai::Lessons.normalize_material_outline(result.value!, source).map do |chapter|
+            chapter.merge("anchors" => Array(chapter["sourceSectionIds"]).map { |id| { "materialId" => source.id, "sectionId" => id } })
+          end
+        end
+      if chapters.empty?
+        code = pause_and_code(lesson, ApplicationErrors::Failure.new(
+          code: :INTERNAL, context: { message: "ai lesson outline payload had no usable chapters" }
+        ))
+        return [ :fail, code ]
+      end
+
+      outline = Ai::Lessons.outline_placeholder(chapters.map { |chapter| { title: chapter[:title] || chapter["title"], anchors: chapter[:anchors] || chapter["anchors"] } })
+      # pausedKind clears HERE too: the captured generation hash may still
+      # carry the pause a PREVIOUS failed in-stream outline attempt landed —
+      # merging over it would keep a false pause banner on a lesson whose
+      # outline just succeeded (the existing-outline resume clears at stream
+      # start; the empty-outline success write is its own way back).
+      lesson.update!(generation: generation.merge("outline" => outline, "pausedKind" => nil))
+      [ :ok, outline ]
+    end
+
+    # The pause write (spec decision 9): CAP_REACHED → pausedKind=cap,
+    # anything else → pausedKind=provider. Everything already generated
+    # stays on the row (the pause never costs work).
+    def pause_and_code(lesson, failure)
+      kind = failure.code == :CAP_REACHED ? "cap" : "provider"
+      lesson.update!(generation: lesson.generation.merge("pausedKind" => kind))
+      failure.code.to_s
+    end
+
+    def stream_proposal(user, payload, override = nil)
       language = payload["language"]
       sse("rung", {
         "intent" => "reference",
@@ -202,7 +450,7 @@ module Api
       failure = catch(:client_gone) do
         stream_to_tokens(user, messages, ->(delta) {
           splitter.feed(delta).each { |token| sse("token", { "text" => token }) }
-        })
+        }, override)
       end
       return if failure == :client_gone
       return terminal(code: failure.code) if failure.is_a?(ApplicationErrors::Failure)

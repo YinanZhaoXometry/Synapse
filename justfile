@@ -64,6 +64,51 @@ minio-image:
 dev:
     cd frontend && npm run dev
 
+# Desktop shell (Electron, epic 38) in dev mode — run `just dev` FIRST: the
+# shell loads the Vite dev server, so /graphql + /api/stream ride the proxy
+# (same-origin — zero CORS, no deployed-stack dependency). First run needs
+# `cd desktop && npm ci` (electron download; slow networks: ELECTRON_MIRROR,
+# see desktop/README.md).
+desktop:
+    cd desktop && SYNAPSE_DESKTOP_DEV_URL=http://localhost:8080 npm run dev
+
+# Package the macOS desktop build: builds the SPA with the deployed api URL
+# baked in (VITE_API_URL — override with SYNAPSE_DESKTOP_API_URL; must end in
+# /graphql, sse-client derives /api/stream from it), stages dist into the
+# shell, runs electron-builder → desktop/release/*.dmg. The dmg talks to the
+# DEPLOYED api — its CORS_ORIGIN must include app://synapse (docs/deploy.md
+# §12). First launch on a downloaded copy needs the quarantine clear — see
+# the release notes template (.github/workflows/desktop-release-notes.md).
+desktop-dist:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    api_url="${SYNAPSE_DESKTOP_API_URL:-https://synapse-api-0lf4.onrender.com/graphql}"
+    (cd frontend && VITE_API_URL="$api_url" npm run build)
+    rm -rf desktop/dist
+    cp -R frontend/dist desktop/dist
+    (cd desktop && npm run dist:mac)
+
+# Publish a desktop release — the industry posture: releases are TAG-driven,
+# not per-merge. Bump desktop/package.json's version and commit it first;
+# this pushes the matching desktop-v<version> tag, and desktop-release.yml
+# builds mac+win and publishes the GitHub Release under that tag.
+desktop-release:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version="$(jq -r .version desktop/package.json)"
+    tag="desktop-v${version}"
+    if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+      echo "just: tag ${tag} already exists — bump desktop/package.json's version (and commit) first" >&2
+      exit 1
+    fi
+    if ! git diff --quiet && ! git diff --cached --quiet; then
+      echo "just: working tree is dirty — commit first (the tag must point at a merged commit)" >&2
+      exit 1
+    fi
+    git tag "$tag"
+    git push origin "$tag"
+    echo "tagged ${tag} — watch the Desktop Release workflow publish it"
+
 # Compose postgres + backend; returns once the backend actually answers the health query.
 up:
     #!/usr/bin/env bash

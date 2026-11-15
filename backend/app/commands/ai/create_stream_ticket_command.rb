@@ -17,14 +17,21 @@ module Ai
   # creation message + up to 5 attached materials' client-extracted text —
   # parsing stays client-side, AD-7, and there is no material row pre-create;
   # the former {topic, goal} shape is retired with the goal chips);
-  # plan_companion = {plan_id, question, language, mistake_entry_id?} (epic
-  # P2-12 T3, FR-46) — string-keyed, TS keys verbatim.
+  # plan_companion = {plan_id, question, language, mistake_entry_id?, node_id?}
+  # (epic P2-12 T3, FR-46; node_id is epic-34 T2's AI 讲解 teaching input) —
+  # string-keyed, TS keys verbatim. lesson = {lesson_id, language, regenerate?}
+  # (epic-36 T1, spec decision 5 — the generated-lesson section fill; the
+  # lesson is an owned origin=generated Material with a generation jsonb;
+  # regenerate is T2's in-place-replace flag — true makes the stream op
+  # re-derive the outline from the CURRENT grounding and re-fill every
+  # section on the same row).
   class CreateStreamTicketCommand < ApplicationCommand
     include ReadingLocators
 
     option :current_user
     option :op
     option :language
+    option :provider_override, optional: true
     option :material_id, optional: true
     option :question, optional: true
     option :position, optional: true
@@ -34,6 +41,9 @@ module Ai
     option :materials, optional: true
     option :plan_id, optional: true
     option :mistake_entry_id, optional: true
+    option :node_id, optional: true
+    option :lesson_id, optional: true
+    option :regenerate, optional: true
 
     MAX_QUESTION_CHARS = 20_000
     MAX_MESSAGE_CHARS = 4_000
@@ -56,9 +66,22 @@ module Ai
       payload = case op.to_s
       when "companion" then companion_payload
       when "proposal" then proposal_payload
+      when "lesson" then lesson_payload
       else plan_companion_payload
       end
       return payload if payload.failure?
+
+      # BYOK (epic 39 T2): a validated provider override rides the ticket
+      # payload jsonb — the redeem side hands it to Provider.stream so the
+      # caller's own endpoint pays the streamed call. Validated AT MINT so a
+      # bad config fails the mutation loudly, not the SSE stream.
+      payload = payload.value!
+      if provider_override
+        coerced = Ai::ProviderOverride.coerce(provider_override)
+        return coerced if coerced.failure?
+
+        payload["provider"] = coerced.value!.to_payload
+      end
 
       if current_user.stream_tickets.where(consumed_at: nil).where(expires_at: Time.current..).count >= MAX_LIVE_TICKETS
         return Failure(:RATE_LIMITED, { message: "too many live stream tickets" })
@@ -67,7 +90,7 @@ module Ai
       ticket = current_user.stream_tickets.create!(
         op: op,
         token: SecureRandom.urlsafe_base64(32),
-        payload: payload.value!,
+        payload: payload,
         expires_at: Ai.stream_ticket_ttl_seconds.seconds.from_now
       )
       Success(ticket: ticket)
@@ -171,10 +194,13 @@ module Ai
 
     # Plan-level companion inputs (FR-46, epic P2-12 T3): an owned plan
     # (uniform NOT_FOUND for foreign/malformed ids — the reads convention),
-    # a question bounded like companion's, and an optional mistake entry
-    # resolved through current_user.mistake_entries (the "analyze my
-    # mistakes" grounding input — also uniform NOT_FOUND). The plan scope
-    # carries no ReadingPosition, so nothing else crosses.
+    # a question bounded like companion's, and two optional grounding inputs,
+    # each resolved with the same uniform NOT_FOUND posture: the mistake
+    # entry through current_user.mistake_entries (the "analyze my mistakes"
+    # input), and — epic-34 T2's AI 讲解 — the teach node, ownership-checked
+    # against the TICKET'S PLAN (the user's node on a different plan, a task
+    # node, a foreign node: all NOT_FOUND). The plan scope carries no
+    # ReadingPosition, so nothing else crosses.
     def plan_companion_payload
       return Failure(:VALIDATION_FAILED, { message: "the plan companion stream needs a plan", field: :planId }) unless plan_id
       return Failure(:NOT_FOUND, { message: "plan not found" }) unless plan_id.to_s.match?(Accounts::UUID_REGEX)
@@ -190,6 +216,14 @@ module Ai
         return Failure(:NOT_FOUND, { message: "mistake entry not found" }) unless entry
       end
 
+      node = nil
+      if node_id
+        return Failure(:NOT_FOUND, { message: "node not found" }) unless node_id.to_s.match?(Accounts::UUID_REGEX)
+
+        node = current_user.knowledge_nodes.find_by(id: node_id, plan_id: plan.id)
+        return Failure(:NOT_FOUND, { message: "node not found" }) unless node
+      end
+
       question_text = question.to_s.strip
       return Failure(:VALIDATION_FAILED, { message: "the plan companion stream needs a question", field: :question }) if question_text.empty?
       if question_text.length > MAX_QUESTION_CHARS
@@ -202,6 +236,29 @@ module Ai
         "language" => language
       }
       payload["mistake_entry_id"] = entry.id if entry
+      payload["node_id"] = node.id if node
+      Success(payload)
+    end
+
+    # Lesson inputs (epic-36 T1, spec decision 5): an owned generated
+    # Material with a generation jsonb (uniform NOT_FOUND — foreign,
+    # unknown, malformed, uploaded, or generation-less lessons all answer
+    # the same; never an existence leak). regenerate rides ONLY when true
+    # (the payload shape stays byte-identical otherwise, the escalated
+    # precedent). The outline/sections live on the lesson row, the resume
+    # semantics read the row's state, and the language rides for the
+    # section prompts.
+    def lesson_payload
+      return Failure(:VALIDATION_FAILED, { message: "the lesson stream needs a lesson", field: :lessonId }) unless lesson_id
+      return Failure(:NOT_FOUND, { message: "lesson not found" }) unless lesson_id.to_s.match?(Accounts::UUID_REGEX)
+
+      lesson = current_user.materials.find_by(id: lesson_id)
+      unless lesson && lesson.generated? && lesson.generation.is_a?(Hash)
+        return Failure(:NOT_FOUND, { message: "lesson not found" })
+      end
+
+      payload = { "lesson_id" => lesson.id, "language" => language }
+      payload["regenerate"] = true if regenerate == true
       Success(payload)
     end
   end

@@ -21,13 +21,13 @@
  * complete (AD-9): every action is a native link/button.
  */
 import { Sparkles } from "lucide-react";
+import EvidenceMarks from "./evidence-marks";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { MaterialNodeMappingView, MaterialView } from "@/api/views";
-import { OutcomeMark } from "./atoms";
 import type { NodeRowView } from "./display-shaping";
-import { OUTCOME_LABEL_KEY } from "./outcome-labels";
 import NodeActions from "./node-actions";
+import { nodeLessonMaterial } from "./lesson-entry";
 import { NodeStateBadge } from "./node-state-badge";
 import { nodeJumpTargets } from "./node-state";
 
@@ -37,6 +37,9 @@ export default function NodeRow({
   materials,
   mappings,
   mappingsFailed = false,
+  onTeach,
+  onLesson,
+  lessonHint = null,
 }: {
   view: NodeRowView;
   planId: string;
@@ -44,11 +47,20 @@ export default function NodeRow({
   /** The plan-scope batch rows (T4); undefined while the batch read is in flight. */
   mappings?: MaterialNodeMappingView[];
   mappingsFailed?: boolean;
+  /** The AI 讲解 entry (epic-34 T2): the plan page shell opens its drawer. */
+  onTeach: (nodeId: string, nodeTitle: string) => void;
+  /** epic-36 T2 (生成讲义): the shell creates/opens the node's lesson. */
+  onLesson?: (nodeId: string, nodeTitle: string) => void;
+  /** The composed entry hint (estimate × remaining); null while either read is in flight. */
+  lessonHint?: string | null;
 }) {
   const { t } = useLanguage();
   // The node's rows off the batch, resolved into REAL jump targets (the
   // anchor channel — nodeJumpTargets filters confirmed + parsed + present).
   const targets = mappings ? nodeJumpTargets(nodeRowsFor(mappings, view.node.id), materials) : null;
+  // epic-36 T2: the node's existing lesson (the server's per-node singleton,
+  // mirrored off the materials read this row already holds).
+  const lessonMaterialId = onLesson ? (nodeLessonMaterial(materials, view.node.id)?.id ?? null) : null;
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <NodeStateBadge state={view.state} />
@@ -62,6 +74,10 @@ export default function NodeRow({
         planId={planId}
         nodeId={view.node.id}
         nodeTitle={view.node.title}
+        onTeach={onTeach}
+        lessonMaterialId={lessonMaterialId}
+        lessonHint={lessonHint}
+        onLesson={onLesson}
       />
       <Popover>
         <PopoverTrigger asChild>
@@ -75,22 +91,7 @@ export default function NodeRow({
         </PopoverTrigger>
         <PopoverContent className="w-64 text-xs">
           <p className="font-semibold mb-2">{view.node.title}</p>
-          <div className="flex items-center gap-1.5 mb-2">
-            {view.lastOutcomes.length === 0 ? (
-              <span className="text-muted-foreground">{t("plans.noEvidence")}</span>
-            ) : (
-              view.lastOutcomes.map((outcome, i) => <OutcomeMark key={`${outcome}-${i}`} outcome={outcome} />)
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mb-2 text-[10px] text-muted-foreground">
-            {(["correct", "partial", "wrong"] as const).map((outcome) => (
-              <span key={outcome} className="inline-flex items-center gap-1">
-                <OutcomeMark outcome={outcome} small />
-                {t(OUTCOME_LABEL_KEY[outcome])}
-              </span>
-            ))}
-          </div>
-          <p className="text-muted-foreground leading-[1.5]">{t("plans.evidenceRule")}</p>
+          <EvidenceMarks outcomes={view.lastOutcomes} />
         </PopoverContent>
       </Popover>
     </div>

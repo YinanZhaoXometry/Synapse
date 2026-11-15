@@ -17,7 +17,7 @@
  * the presigned GET). Quick actions never promise dead clicks: generation
  * tiles explain their slice, upload opens the real file picker.
  */
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, BookOpen, ChevronUp, FileText, GitFork, Info, Layers, ListChecks, MessageCircle, RotateCw, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -25,14 +25,21 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { QuizLauncher, quizableMaterials } from "@/features/quiz";
 import { FlashcardLauncher } from "@/features/flashcards";
-import { CompanionPanel } from "@/features/companion";
+import { CompanionPanel, type TeachPrefill } from "@/features/companion";
 import MaterialCoveragePanel from "./MaterialCoveragePanel";
 import MaterialScopeControls from "./MaterialScopeControls";
 import NotesSection from "./NotesSection";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PlanVisibilityControls from "./PlanVisibilityControls";
 import {
+  apiErrorCode,
+  apiErrorKeys,
+  newClientUuid,
   sessionBlobs,
+  useAiUsageTodayQuery,
   useAllEvidenceQuery,
+  useCreateLessonMutation,
+  useLessonEstimateQuery,
   useMaterialUpload,
   useFlashcardsByPlanQuery,
   usePlanMaterialsQuery,
@@ -47,6 +54,9 @@ import { cn } from "@/lib/utils";
 import type { KnowledgeNodeView, MaterialView } from "@/api/views";
 import { PARSE_REASON_MESSAGE_KEY, useParseMaterialMutation } from "@/features/reader";
 import { nodeRowViews, planCardMetrics, planRecentActivity, stageGroups } from "./display-shaping";
+import { unmappedNodeCount } from "./auto-mapping";
+import { lessonEntryHint, nodeLessonMaterial } from "./lesson-entry";
+import { useAutoMapping } from "./use-auto-mapping";
 import NodeRow from "./node-row";
 import RoadmapGraph from "./RoadmapGraph";
 import { localeTag } from "./locale";
@@ -54,6 +64,13 @@ import { isPptxUpload, validateUpload } from "./upload-validation";
 import { useSessionBlob } from "./use-session-blob";
 import { ContractNote, MasteryRing, StreakChip } from "./atoms";
 import PageLoader from "@/components/shared/PageLoader";
+import type { ErrorLike } from "@apollo/client";
+
+// The lesson create's toast keys ride the shared ai.generate. closed enum
+// (the server adapter's map — capReached included); anything unmapped falls
+// to the honest generic failure key.
+const LESSON_ERROR_KEYS: Record<string, string> = apiErrorKeys("ai.generate.");
+const LESSON_CREATE_FAILED_KEY = "ai.generate.failed";
 
 export default function PlanHomePage() {
   const { t, language } = useLanguage();
@@ -103,6 +120,73 @@ export default function PlanHomePage() {
   const mistakesQuery = usePlanMistakeEntriesQuery(id ?? "");
   const [companionOpen, setCompanionOpen] = useState(false);
   const companionSectionRef = useRef<HTMLElement>(null);
+  // Epic-34 T2 (AI 讲解): a node's teach action hands the drawer its session
+  // request — the panel marks the node (every turn rides the nodeId) and
+  // pre-fills the composer. The generic quick action hands null (clears).
+  const [teachRequest, setTeachRequest] = useState<TeachPrefill | null>(null);
+  const teachNonceRef = useRef(0);
+  // Epic-34 T3 (Auto-mapping; GLOSSARY Auto-mapping): the ONE trigger point —
+  // while this page is mounted, every parsed material with sections and zero
+  // mapping rows gets the mapping mutation fired once per mount session
+  // (CreationChat deliberately isn't instrumented: it navigates here and the
+  // effect catches the staged materials on arrival). The coverage panel's
+  // auto states + the computed unmapped-nodes summary ride the returned state.
+  const { autoRunningFor, capReached } = useAutoMapping({
+    materials: materialsQuery.data,
+    mappingRows: mappingsQuery.data,
+  });
+  // Epic-36 T2 (生成讲义): the node sheet's lesson entry — the shell owns the
+  // create → navigate flow. An existing lesson (the server's per-node
+  // singleton, mirrored by nodeLessonMaterial off the materials read) OPENS
+  // instead of creating. The create carries ONE server-side outline call; a
+  // NEW lesson navigates with ?generate=1 — the one-shot "stream now" command
+  // the reader consumes once on mount (the explicit commitment: no auto-resume
+  // ever re-streams a returned-to lesson — spec decision 9).
+  const lessonEstimateQuery = useLessonEstimateQuery("node");
+  const aiUsageQuery = useAiUsageTodayQuery();
+  const lessonHint = lessonEntryHint(lessonEstimateQuery.data, aiUsageQuery.data, t);
+  const [createLessonMutation, createLessonResult] = useCreateLessonMutation();
+  const handleNodeLesson = useCallback(
+    (nodeId: string, _nodeTitle: string) => {
+      const existing = nodeLessonMaterial(materialsQuery.data, nodeId);
+      if (existing) {
+        navigate(`/read/${existing.id}`);
+        return;
+      }
+      if (createLessonResult.loading) return; // one commit per click
+      void createLessonMutation({
+        variables: { input: { clientUuid: newClientUuid(), language, planId: id, nodeId } },
+        onCompleted: (data) => {
+          const lesson = data?.createLesson?.material;
+          if (lesson) navigate(`/read/${lesson.id}?generate=1`);
+          else toast.error(t("ai.generate.failed"));
+        },
+        onError: (error) => {
+          const code = apiErrorCode(error as ErrorLike);
+          toast.error(t(code ? (LESSON_ERROR_KEYS[code] ?? LESSON_CREATE_FAILED_KEY) : LESSON_CREATE_FAILED_KEY));
+        },
+      });
+    },
+    [materialsQuery.data, createLessonMutation, createLessonResult.loading, language, id, navigate, t],
+  );
+
+  // The shared drawer tail (review round): open + smooth-scroll the drawer
+  // into view — both the generic entry and a node's 讲解 handoff land here.
+  const openDrawer = () => {
+    setCompanionOpen(true);
+    requestAnimationFrame(() => companionSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
+  const openCompanion = () => {
+    setTeachRequest(null);
+    openDrawer();
+  };
+
+  const openTeaching = (nodeId: string, nodeTitle: string) => {
+    teachNonceRef.current += 1;
+    setTeachRequest({ nodeId, nodeTitle, nonce: teachNonceRef.current });
+    openDrawer();
+  };
 
   const openPicker = (materialId: string | null = null) => {
     pickerTargetRef.current = materialId;
@@ -193,6 +277,10 @@ export default function PlanHomePage() {
   const activity = planRecentActivity(nodes, evidence);
   const views = nodeRowViews(nodes, evidence);
   const hasMaterials = materials.length > 0;
+  // Epic-34 T3: the coverage-honesty summary — plan nodes with zero CONFIRMED
+  // mapping rows (GLOSSARY Unmapped node), derived from the batch mapping read
+  // the page already loads; pure derivation, no new query fields.
+  const unmappedNodes = unmappedNodeCount(nodes, mappingsQuery.data ?? []);
   // Quiz generation needs parsed sections (FR-18 sourcing honesty) — pending/
   // failed/empty materials cannot serve a quiz, so they don't unlock the tile.
   const quizable = quizableMaterials(materials);
@@ -222,11 +310,10 @@ export default function PlanHomePage() {
       desc: t("plans.quickCompanionDesc"),
       off: false,
       // Epic P2-12 T3 (FR-46): opens the plan-grounded chat drawer (the
-      // retired slice-4 placeholder toast is gone).
-      run: () => {
-        setCompanionOpen(true);
-        requestAnimationFrame(() => companionSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
-      },
+      // retired slice-4 placeholder toast is gone). The GENERIC entry —
+      // epic-34 T2: it also clears any AI 讲解 node session the drawer
+      // was carrying (context follows intent, not stale memory).
+      run: openCompanion,
     },
   ] as const;
 
@@ -282,27 +369,22 @@ export default function PlanHomePage() {
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-[1fr_320px] gap-6 mt-5 items-start">
-        {/* left zone: nodes + materials */}
+      {/* T03 owner round: the graph zone takes the extra room — the rail
+          (materials + notes + quick actions + activity since the feedback
+          round) gives back 20/32px. */}
+      <div className="grid lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_368px] gap-6 mt-5 items-start">
+        {/* left zone: the nodes view (spine roadmap / list) */}
         <div className="min-w-0">
-          <div className="flex items-center gap-2 mb-3" role="group">
-            <button
-              type="button"
-              aria-pressed={nodesView === "list"}
-              onClick={() => setNodesView("list")}
-              className={cn("pill cursor-pointer", nodesView !== "list" && "pill-muted")}
-            >
-              {t("plans.viewList")}
-            </button>
-            <button
-              type="button"
-              aria-pressed={nodesView === "graph"}
-              onClick={() => setNodesView("graph")}
-              className={cn("pill cursor-pointer", nodesView !== "graph" && "pill-muted")}
-            >
-              {t("plans.viewGraph")}
-            </button>
-          </div>
+          <Tabs value={nodesView} onValueChange={(value) => setNodesView(value as "list" | "graph")}>
+            <TabsList className="mb-3">
+              <TabsTrigger value="graph" data-testid="view-tab-graph" className="cursor-pointer">
+                {t("plans.viewGraph")}
+              </TabsTrigger>
+              <TabsTrigger value="list" data-testid="view-tab-list" className="cursor-pointer">
+                {t("plans.viewList")}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
           {nodesView === "graph" ? (
             <section className="mb-5">
               <RoadmapGraph
@@ -312,6 +394,9 @@ export default function PlanHomePage() {
                 edges={plan.edges}
                 mappings={mappingsQuery.data}
                 mappingsFailed={!!mappingsQuery.error}
+                onTeachNode={openTeaching}
+                onLessonNode={handleNodeLesson}
+                lessonHint={lessonHint}
               />
             </section>
           ) : (
@@ -327,11 +412,50 @@ export default function PlanHomePage() {
                       materials={materials}
                       mappings={mappingsQuery.data}
                       mappingsFailed={!!mappingsQuery.error}
+                      onTeach={openTeaching}
+                      onLesson={handleNodeLesson}
+                      lessonHint={lessonHint}
                     />
                   ))}
                 </div>
               </section>
             ))
+          )}
+
+
+        </div>
+
+        {/* right zone: materials + notes (owner round 2026-11-11 — the rail
+            carries the user's study collateral beside the roadmap) + attach
+            CTA + quick actions + activity */}
+        <div className="space-y-4 min-w-0">
+          {!hasMaterials && (
+            <button
+              type="button"
+              onClick={() => openPicker()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                handleFiles(e.dataTransfer.files);
+              }}
+              className={cn(
+                "w-full rounded-2xl border-[1.5px] border-dashed px-4 py-6 text-center cursor-pointer transition-colors",
+                dragOver
+                  ? "border-[var(--accent-ring)] bg-[var(--accent-tint-2)]"
+                  : "border-[var(--accent-edge)] bg-[var(--accent-tint)] hover:bg-[var(--accent-tint-2)]",
+              )}
+            >
+              <Upload className="w-5 h-5 mx-auto text-accent-ink" aria-hidden="true" />
+              <p className="text-sm font-semibold mt-2">{t("plans.attachCta")}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {dragOver ? t("plans.attachDropActive") : t("plans.attachCtaHint")}
+              </p>
+            </button>
           )}
 
           <section>
@@ -362,7 +486,13 @@ export default function PlanHomePage() {
                       onToggleCoverage={() => setCoverageFor(coverageFor === material.id ? null : material.id)}
                     />
                     {coverageFor === material.id && (
-                      <MaterialCoveragePanel material={material} nodes={nodes} />
+                      <MaterialCoveragePanel
+                        material={material}
+                        nodes={nodes}
+                        autoRunning={autoRunningFor === material.id}
+                        capReached={capReached}
+                        unmappedNodes={unmappedNodes}
+                      />
                     )}
                   </div>
                 ))}
@@ -379,38 +509,6 @@ export default function PlanHomePage() {
               the ONE server union) plus the generate control with the
               user-requested annotation input. */}
           <NotesSection planId={plan.id} nodes={nodes} materials={materials} />
-        </div>
-
-        {/* right zone: attach CTA + quick actions + activity */}
-        <div className="space-y-4">
-          {!hasMaterials && (
-            <button
-              type="button"
-              onClick={() => openPicker()}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(false);
-                handleFiles(e.dataTransfer.files);
-              }}
-              className={cn(
-                "w-full rounded-2xl border-[1.5px] border-dashed px-4 py-6 text-center cursor-pointer transition-colors",
-                dragOver
-                  ? "border-[var(--accent-ring)] bg-[var(--accent-tint-2)]"
-                  : "border-[var(--accent-edge)] bg-[var(--accent-tint)] hover:bg-[var(--accent-tint-2)]",
-              )}
-            >
-              <Upload className="w-5 h-5 mx-auto text-accent-ink" aria-hidden="true" />
-              <p className="text-sm font-semibold mt-2">{t("plans.attachCta")}</p>
-              <p className="text-[11px] text-muted-foreground mt-1">
-                {dragOver ? t("plans.attachDropActive") : t("plans.attachCtaHint")}
-              </p>
-            </button>
-          )}
 
           <div className="bg-card border border-border-soft rounded-2xl shadow-raised p-4">
             <h2 className="eyebrow mb-3">{t("plans.quickActions")}</h2>
@@ -488,6 +586,7 @@ export default function PlanHomePage() {
             planId={plan.id}
             materials={materials}
             mistakeEntries={mistakesQuery.data ?? []}
+            teachPrefill={teachRequest}
           />
         </div>
       </section>
@@ -578,40 +677,27 @@ function MaterialRow({
   // material with content has sections to map — the action never shows for
   // pending/failed rows (there is nothing honest to map yet).
   const hasSections = material.parseState === "parsed" && material.sections.length > 0;
+  // Two-line card (epic-35 T01): the rail gives this row ~288px and the chips
+  // are nowrap, so a single flex line squeezes the title to nothing (the
+  // TaskHomePage row's flex-wrap is the precedent). Line 1 = identity + the
+  // reader link; line 2 wraps the status/meta/coverage/scope chips honestly.
   return (
-    <div className="flex items-center gap-3 px-4 py-3">
-      <FileText className="w-4 h-4 text-muted-foreground flex-none" aria-hidden="true" />
-      <span className="text-sm truncate flex-1">{material.title}</span>
-      {/* Open in the Immersive Reader (FR-8; T2) — every state lands honestly
-          there: parsing shows the skeleton, failed the reason card, and a
-          byteless parsed material the re-upload affordance. */}
-      <Link
-        to={`/read/${material.id}`}
-        className="inline-flex items-center gap-1 text-[11px] font-semibold text-accent-ink cursor-pointer hover:underline flex-none"
-        title={t(openLabelKey)}
-      >
-        <BookOpen className="w-3 h-3" aria-hidden="true" /> {t(openLabelKey)}
-      </Link>
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground flex-none">{kind}</span>
-      <span className="text-[10px] text-muted-foreground tabular-nums flex-none">
-        {t("plans.sizeMb", { n: (material.sizeBytes / 1e6).toFixed(1) })}
-      </span>
-      {hasSections && (
-        <button
-          type="button"
-          onClick={onToggleCoverage}
-          aria-expanded={coverageOpen}
-          className={cn(
-            "pill cursor-pointer flex-none",
-            coverageOpen ? "pill-mastered" : "pill-muted",
-          )}
+    <div className="px-4 py-3">
+      <div className="flex items-center gap-3 min-w-0">
+        <FileText className="w-4 h-4 text-muted-foreground flex-none" aria-hidden="true" />
+        <span className="text-sm truncate flex-1 min-w-0">{material.title}</span>
+        {/* Open in the Immersive Reader (FR-8; T2) — every state lands honestly
+            there: parsing shows the skeleton, failed the reason card, and a
+            byteless parsed material the re-upload affordance. */}
+        <Link
+          to={`/read/${material.id}`}
+          className="inline-flex items-center gap-1 text-[11px] font-semibold text-accent-ink cursor-pointer hover:underline flex-none"
+          title={t(openLabelKey)}
         >
-          {t("mapping.title")}
-        </button>
-      )}
-      {/* Attachment scope (FR-44, epic P2-10 T2): the chip + pin/widen affordance.
-          Task materials render nothing (the triangle has no node pinning). */}
-      <MaterialScopeControls material={material} nodes={nodes} />
+          <BookOpen className="w-3 h-3" aria-hidden="true" /> {t(openLabelKey)}
+        </Link>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-1.5">
       {needsReupload ? (
         <span className="flex items-center gap-2 flex-none">
           <span className="pill pill-muted cursor-help" title={t("plans.materialsSessionNote")}>
@@ -652,6 +738,30 @@ function MaterialRow({
           {t("plans.parsePending")}
         </span>
       )}
+        {/* kind + size as one muted meta token — two chips were two overflow
+            candidates in a 288px rail (epic-35 T01). */}
+        <span className="text-[10px] text-muted-foreground flex-none">
+          <span className="uppercase tracking-wide">{kind}</span>
+          {" · "}
+          <span className="tabular-nums">{t("plans.sizeMb", { n: (material.sizeBytes / 1e6).toFixed(1) })}</span>
+        </span>
+        {hasSections && (
+          <button
+            type="button"
+            onClick={onToggleCoverage}
+            aria-expanded={coverageOpen}
+            className={cn(
+              "pill cursor-pointer flex-none",
+              coverageOpen ? "pill-mastered" : "pill-muted",
+            )}
+          >
+            {t("mapping.title")}
+          </button>
+        )}
+        {/* Attachment scope (FR-44, epic P2-10 T2): the chip + pin/widen affordance.
+            Task materials render nothing (the triangle has no node pinning). */}
+        <MaterialScopeControls material={material} nodes={nodes} />
+      </div>
     </div>
   );
 }

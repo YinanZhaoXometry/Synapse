@@ -1,5 +1,27 @@
 @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap');
 
+/* Balsamiq Sans — the roadmap canvas font (epic-28), SELF-HOSTED (OFL 1.1,
+   license: public/fonts/OFL.txt). CJK titles fall through to the system
+   stack — the font carries latin/latin-ext only. */
+/* Balsamiq Sans latin-ext — OFL 1.1 (license beside the files) */
+@font-face {
+  font-family: 'Balsamiq Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/balsamiq-sans-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* Balsamiq Sans latin — OFL 1.1 (license beside the files) */
+@font-face {
+  font-family: 'Balsamiq Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/balsamiq-sans-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -16,6 +38,9 @@
 
     --popover: 0 0% 100%;
     --popover-foreground: 240 9% 11%;
+    /* The roadmap hover chip strip's translucent face (T03 — roadmap.sh's
+       glass tooltip): the popover hue at ~86% opacity, blurred behind. */
+    --popover-glass: rgba(255, 253, 250, 0.86);
 
     --primary: 0 100% 69%;
     --primary-foreground: 0 0% 100%;
@@ -126,6 +151,21 @@
     --sidebar-accent-foreground: 240 9% 11%;
     --sidebar-border: 33 45% 88%;
     --sidebar-ring: 0 100% 69%;
+
+    /* ── Roadmap skin (epic-28): the roadmap.sh look, COPIED VERBATIM from
+       the measured renderer (owner decision 2026-11-11 — style parameters
+       only; content/assets stay banned, FR-43 wontfix). Same values in light
+       and dark by contract; only the canvas SURFACE follows the theme
+       tokens. Components reference these vars — zero raw hex in TSX. */
+    --roadmap-hub-face: #fdff00;   /* main-node (stage hub) fill */
+    --roadmap-leaf-face: #ffe599;  /* secondary-node (knowledge node) fill */
+    --roadmap-edge: #2b78e4;       /* every connector */
+    --roadmap-node-border: #000000;
+    --roadmap-node-ink: #000000;
+    /* Study Mark chip colors (our vocabulary, roadmap.sh's badge posture) */
+    --roadmap-mark-learning: #2b78e4;
+    --roadmap-mark-finished: #1e9e5a;
+    --roadmap-mark-skipped: #9aa0a6;
   }
 }
 
@@ -143,6 +183,7 @@
     --card-foreground: 23 27% 94%;
     --popover: 285 12% 13%;
     --popover-foreground: 23 27% 94%;
+    --popover-glass: rgba(30, 26, 34, 0.86);
 
     --secondary: 300 10% 16%;      /* #2d252d */
     --secondary-foreground: 23 27% 94%;
@@ -253,6 +294,11 @@
   }
   .font-body {
     font-family: 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif;
+  }
+  /* The roadmap canvas's font scope (epic-28): Balsamiq Sans with the CJK
+     fallback chain — latin titles get the hand-drawn look, CJK falls back. */
+  .roadmap-font {
+    font-family: 'Balsamiq Sans', 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif;
   }
   .page-title {
     @apply text-[27px] md:text-[34px] font-display font-semibold tracking-[-0.025em] leading-[1.16];
@@ -392,6 +438,34 @@
     -webkit-backdrop-filter: blur(20px) saturate(180%);
     backdrop-filter: blur(20px) saturate(180%);
     border-color: var(--glass-edge);
+  }
+  /* Desktop shell (epic 39 T1): macOS runs a hidden native title bar and the
+     app's own chrome is the drag surface — interactive descendants opt out.
+     No-ops on the web (the classes are only applied inside the shell). */
+  .desktop-drag-region {
+    -webkit-app-region: drag;
+  }
+  .desktop-drag-region button,
+  .desktop-drag-region a,
+  .desktop-drag-region input,
+  .desktop-drag-region select,
+  .desktop-drag-region textarea,
+  .desktop-drag-region [role="button"] {
+    -webkit-app-region: no-drag;
+  }
+  .desktop-no-drag {
+    -webkit-app-region: no-drag;
+  }
+  /* Immersive reading has no sidebar — a transparent top strip keeps the
+     window movable without stealing clicks (drag only). */
+  .desktop-drag-strip {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 24px;
+    z-index: 5;
+    -webkit-app-region: drag;
   }
   .glass-bottom-nav {
     background: var(--glass-bar);

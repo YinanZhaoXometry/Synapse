@@ -79,6 +79,11 @@ module Types
     field :claim_section, mutation: Mutations::Markings::ClaimSection
     field :unclaim_section, mutation: Mutations::Markings::UnclaimSection
 
+    # The Study Mark (FR-47, epic-28 T1): set/clear a node's self-declared
+    # status (learning | finished | skipped) — orthogonal to mastery, never
+    # evidence; nothing computational reads it.
+    field :node_study_mark_set, mutation: Mutations::Nodes::NodeStudyMarkSet
+
     # The FR-16 annotation ops (epic-13 T3, delta decision 3): the
     # highlight/underline writes — add pins the char-offset range (the
     # delta-3 shape law lives in the command), remove takes the row down.
@@ -138,5 +143,12 @@ module Types
     # bonus keeps riding any entry (the ruling annotated at
     # Ai::TargetingCandidates).
     field :set_mistake_entry_resolved, mutation: Mutations::Mistakes::SetMistakeEntryResolved
+
+    # The generated-lesson surface (epic-36 T1, spec decisions 1+5): the
+    # outline gate (①'s stateless propose) + the unified create (② node /
+    # ① material). The sections fill live through /api/stream?op=lesson —
+    # createStreamTicket mints that op's tickets.
+    field :propose_lesson_outline, mutation: Mutations::Ai::ProposeLessonOutline
+    field :create_lesson, mutation: Mutations::Ai::CreateLesson
   end
 end

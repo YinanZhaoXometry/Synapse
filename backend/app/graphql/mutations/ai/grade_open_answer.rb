@@ -21,16 +21,21 @@ module Mutations
                required: true,
                description: "The reply language: \"zh\" | \"en\" (AD-16 — one parameter, one policy)."
 
+      argument :provider, Types::Ai::ProviderOverrideInput,
+               required: false,
+               description: "BYOK (epic 39): the caller's own OpenAI-compatible provider — overrides the server's for THIS call (their key pays it; no shared daily cap)."
+
       field :graded_answer, Types::GradedAnswerType,
             null: false,
             description: "The grade: outcome (correct | partial | wrong), rationale, optional supporting citation."
 
-      def resolve(question_id:, answer:, language:)
+      def resolve(question_id:, answer:, language:, provider: nil)
         graded = command_result(::Ai::GradeOpenAnswerCommand.call(
           current_user: current_user!,
           question_id: question_id,
           answer: answer,
-          language: language
+          language: language,
+          provider_override: provider&.to_h
         ))
         { graded_answer: graded }
       end

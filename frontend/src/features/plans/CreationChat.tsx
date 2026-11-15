@@ -21,6 +21,7 @@ import { useMaterialUpload } from "@/api/queries/material-queries";
 import { useParseMaterialMutation } from "@/features/reader";
 import type { ProposalMaterial } from "@/ai/types";
 import { isPptxUpload, validateUpload } from "./upload-validation";
+import type { UiLanguage } from "@/ai/types";
 import { cn } from "@/lib/utils";
 import { proposalNodeKey, toPlanCreateInput } from "./creation-mapping";
 import { useCreationChat } from "./use-creation-chat";
@@ -63,7 +64,7 @@ async function fileBytes(file: File): Promise<Uint8Array> {
  * and bound it to the command's per-material cap. Empty extraction and parse
  * failures refuse with their bilingual keys (the parse pipeline's own reason
  * map) — never a silently empty input. */
-async function extractMaterials(staged: StagedFile[], language: "zh" | "en"): Promise<ProposalMaterial[]> {
+async function extractMaterials(staged: StagedFile[], language: UiLanguage): Promise<ProposalMaterial[]> {
   const { parseFile, PARSE_REASON_MESSAGE_KEY } = await import("@/features/reader/parse");
   const out: ProposalMaterial[] = [];
   for (const item of staged) {

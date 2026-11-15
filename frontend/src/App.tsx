@@ -10,7 +10,6 @@ import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import AppLayout from "@/components/layout/AppLayout";
 import NotFound from "@/pages/NotFound";
-import { PLANS_HOME_ROUTE, resolveEntryDestination } from "@/features/plans/entry-decision";
 
 // Route-level code splitting (epic-19 T1): every in-shell route is lazy on the
 // ONE uniform idiom — `React.lazy(() => import(...))` at the declaration site,
@@ -24,6 +23,9 @@ const PlanHomePage = lazy(() => import("@/features/plans/PlanHomePage"));
 const SquarePlanPage = lazy(() => import("@/features/plans/SquarePlanPage"));
 const PlanQuizPage = lazy(() => import("@/pages/PlanQuizPage"));
 const PlanFlashcardsPage = lazy(() => import("@/pages/PlanFlashcardsPage"));
+// The standalone note reading page (epic-35 T02) is lazy too — it pulls the
+// reader's markdown chunk through NoteBodyView, same AD-8 rule as the reader.
+const NotePage = lazy(() => import("@/features/plans/NotePage"));
 const TaskQuizPage = lazy(() => import("@/pages/TaskQuizPage"));
 const TaskFlashcardsPage = lazy(() => import("@/pages/TaskFlashcardsPage"));
 const OnboardingPage = lazy(() => import("@/pages/OnboardingPage"));
@@ -44,16 +46,25 @@ const ReaderPage = lazy(() => import("@/features/reader/ReaderPage"));
 const TaskCreatePage = lazy(() => import("@/features/tasks/TaskCreatePage"));
 const TaskHomePage = lazy(() => import("@/features/tasks/TaskHomePage"));
 
+// The marketing landing (epic-37) rides the root route for logged-out visitors —
+// a big static page, so it gets its own chunk + landing.css with it.
+const LandingPage = lazy(() => import("@/features/landing/LandingPage"));
+
 /**
- * Front-door guard (AD-8, reshaped by ticket 02's login wall): a token sends
- * the root to Plans Home (the creation chat is the front door's primary
- * surface); no token lands on /login — the wall owns the first visit now.
+ * Front-door guard (AD-8, amended by epic-37): a token sends the root to
+ * Plans Home (returning users skip the marketing); a token-less visitor gets
+ * the landing site — /login stays a wall page reachable from the landing's
+ * sign-in link and every auth redirect.
  */
 function EntryGate() {
-  const destination = resolveEntryDestination(true);
-  if (destination === "plans") return <Navigate to={isLoggedIn() ? PLANS_HOME_ROUTE : "/login"} replace />;
-  return <Navigate to="/login" replace />;
+  if (isLoggedIn()) return <Navigate to="/plans" replace />;
+  return (
+    <Suspense fallback={null}>
+      <LandingPage />
+    </Suspense>
+  );
 }
+export { EntryGate };
 
 /**
  * The route guard (AD-15, ticket 02): unauthenticated users bounce to /login
@@ -144,6 +155,17 @@ const App = () => (
                   element={
                     <Suspense fallback={null}>
                       <PlanFlashcardsPage />
+                    </Suspense>
+                  }
+                />
+                {/* The standalone note reading page (epic-35 T02): long notes
+                    leave the plan-home rail — the ReaderPage full-page shell
+                    over the shared NoteBodyView; the rail's rows link here. */}
+                <Route
+                  path="/plan/:id/notes/:noteId"
+                  element={
+                    <Suspense fallback={null}>
+                      <NotePage />
                     </Suspense>
                   }
                 />

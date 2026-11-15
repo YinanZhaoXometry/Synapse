@@ -79,6 +79,25 @@ export interface ReadingCompanionPanelProps {
   selectionRef?: MutableRefObject<string | null>;
   /** The selection bar's composer pre-fill (the quote, honestly displayed). */
   askPrefill?: AskPrefill | null;
+  /** Streaming-state out-plug (owner bug round 2026-11-15): the immersive
+   * float's collapsed pill pulses while a turn is mid-flight, so collapsing
+   * during a reply never hides the activity. Fires on every change; null
+   * streamText = idle. */
+  onStreamingChange?(streaming: boolean): void;
+}
+
+/**
+ * The AI 讲解 handoff (epic-34 T2): the plan page hands the panel a node
+ * teaching request — the drawer session marks the node (every turn rides its
+ * nodeId until the generic entry clears or another 讲解 replaces it) and the
+ * composer pre-fills with the short teaching ask, NEVER auto-sent. `nonce`
+ * makes the identity: re-invoking 讲解 for the same node re-fills the
+ * composer, the way the reading mode's AskPrefill re-asks.
+ */
+export interface TeachPrefill {
+  nodeId: string;
+  nodeTitle: string;
+  nonce: number;
 }
 
 export interface PlanCompanionPanelProps {
@@ -89,6 +108,8 @@ export interface PlanCompanionPanelProps {
   materials: Material[];
   /** The plan's mistake entries — the "analyze my mistakes" picker's rows. */
   mistakeEntries: PlanMistakeEntryView[];
+  /** The AI 讲解 request (epic-34 T2) — null is the generic session. */
+  teachPrefill?: TeachPrefill | null;
 }
 
 export type CompanionPanelProps = ReadingCompanionPanelProps | PlanCompanionPanelProps;
@@ -384,9 +405,16 @@ function ReadingCompanionSurface({
   onJumpToLocator,
   selectionRef,
   askPrefill,
+  onStreamingChange,
 }: ReadingCompanionPanelProps) {
   const { t } = useLanguage();
   const chat = useCompanionChat(materialId, positionRef, selectionRef);
+
+  // The immersive float's pill pulse: forward the turn's liveness upward so
+  // the collapsed pill can signal a reply still streaming behind it.
+  useEffect(() => {
+    onStreamingChange?.(chat.streamText !== null);
+  }, [chat.streamText, onStreamingChange]);
 
   // The selection bar's ask (epic-13 T1): drop the quote into the composer so
   // the user sees exactly what the Companion will be asked about. Identity is
@@ -542,11 +570,30 @@ function ReadingCompanionSurface({
 const PLAN_INTENT_KEYS = [ "tutor.suggestExplain", "tutor.suggestQuiz", "tutor.suggestSummary" ] as const;
 const PLAN_MISTAKE_INTENT_KEY = "tutor.suggestMistake";
 
-function PlanCompanionSurface({ planId, materials, mistakeEntries }: PlanCompanionPanelProps) {
+function PlanCompanionSurface({ planId, materials, mistakeEntries, teachPrefill }: PlanCompanionPanelProps) {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const chat = usePlanCompanionChat(planId);
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // The AI 讲解 handoff (epic-34 T2): identity is the nonce — a 讲解 click
+  // marks the session's node (replace semantics: another node's 讲解 or the
+  // generic entry flips the prop away) and pre-fills the composer. The user
+  // presses send; nothing is spent on the click. The trigger is the derived
+  // plain nonce (epic-34 review round): null ⇄ number covers both flips the
+  // old two-expression dep array caught — the null side collapses the absent
+  // nonce, the number side is every 讲解 click. chat/t ride outside the dep
+  // contract deliberately (per-render identities, never a trigger).
+  const teachNonce = teachPrefill?.nonce ?? null;
+  useEffect(() => {
+    if (teachPrefill) {
+      chat.beginTeaching({ id: teachPrefill.nodeId, title: teachPrefill.nodeTitle });
+      chat.setInput(t("plans.nodeTeachPrefill"));
+    } else {
+      chat.clearTeaching();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teachNonce]);
 
   // Auto-scroll to the newest row / latest streamed token (scaffold pattern).
   const threadRef = useRef<HTMLDivElement>(null);
@@ -615,7 +662,9 @@ function PlanCompanionSurface({ planId, materials, mistakeEntries }: PlanCompani
         <span className="ml-auto flex-none inline-flex items-center rounded-full bg-[var(--accent-tint)] text-accent-ink px-2 py-0.5 text-[11px] font-semibold">
           {streamTarget
             ? t("companion.groundedBadge", { target: streamTarget })
-            : t("companion.planBadge")}
+            : chat.teachNode
+              ? t("companion.teachBadge", { node: chat.teachNode.title })
+              : t("companion.planBadge")}
         </span>
       </div>
 
