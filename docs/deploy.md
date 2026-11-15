@@ -127,7 +127,7 @@ Backend reads ENV only (AD-12; source of truth: `backend/.env.example` + grep `E
 | Name | Secret | Value contract |
 | --- | --- | --- |
 | `DATABASE_URL` | yes | Neon **direct** URL (no `-pooler`), `sslmode=require` (AD-19) |
-| `CORS_ORIGIN` | no | the Pages origin, exactly one (§6) |
+| `CORS_ORIGIN` | no | comma-separated allowlist (§6): the Pages origin + the desktop origin `app://synapse` (§12) |
 | `DEMO_EMAIL` | no | demo account email (§5); downcased on create |
 | `DEMO_PASSWORD` | yes | ≥ 8 chars (register-command parity); production seed fails fast when blank |
 | `R2_ENDPOINT` | no | `https://<account>.r2.cloudflarestorage.com` |
@@ -175,7 +175,7 @@ Backend reads ENV only (AD-12; source of truth: `backend/.env.example` + grep `E
 
 ## 6. CORS — exactly the web origin (ticket AC)
 
-`backend/config/initializers/cors.rb` reads `CORS_ORIGIN` **once at boot** and allowlists the listed origins for `/graphql` (POST) and `/api/stream` (GET). Blank = no cross-origin at all (the safe pre-cutover default). Set it to the Pages origin **and nothing else** — no `localhost`, no trailing slash, exact scheme+host (a Pages preview origin `*.pages.dev` is NOT covered by the production origin; previews calling the production api fail by design — the api is single-tenant demo infrastructure).
+`backend/config/initializers/cors.rb` reads `CORS_ORIGIN` **once at boot** and allowlists the listed origins (comma-separated list, epic-38 amendment) for `/graphql` (POST) and `/api/stream` (GET). Blank = no cross-origin at all (the safe pre-cutover default). Set it to the Pages origin **and nothing else** — no `localhost`, no trailing slash, exact scheme+host (a Pages preview origin `*.pages.dev` is NOT covered by the production origin; previews calling the production api fail by design — the api is single-tenant demo infrastructure). Epic 38 adds exactly ONE more entry: the desktop shell origin `app://synapse` (§12) — everything else stays refused.
 
 **Probe (run after any `CORS_ORIGIN` change):**
 
@@ -281,3 +281,24 @@ Before every **graded demo window**: upgrade both paid services for the window, 
 - **Neon backups/PITR** and **password reset (mail provider)** trigger when real users arrive beyond the demo account — both are owner-provisioned vendor features first, then small builds (registry rows 2–3).
 - **Google OAuth** triggers only when a real user asks (registry row 4; email+password is the shipped auth path).
 - Dates and unblock actions for all four: the ticket-03 registry table — update it there when an item moves.
+
+## 12. Desktop (Electron) 分发 — merge 即 release（epic 38）
+
+The desktop app is the SAME SPA the Pages build serves, packaged by the Electron shell (`desktop/`) with the deployed api URL baked in at build time (`VITE_API_URL` — the existing seam). Nothing new runs anywhere: no new service, no new secret; the app talks to the same Render api + R2 bucket as the web build.
+
+**What happens automatically:** every push to `main` that leaves CI green fires `desktop-release.yml` (via `workflow_run`): macOS + Windows runners build the merge commit (SPA → staged into the shell → electron-builder) and publish a GitHub Release — tag `desktop-v<N>`, marked **latest**, three installers: `Synapse-<ver>-arm64.dmg`, `Synapse-<ver>-x64.dmg`, `Synapse-Setup-<ver>-x64.exe`. The repo's Releases page is the download surface; the release notes carry the unsigned-app install instructions (macOS right-click→Open, Windows SmartScreen「仍要运行」). Pull requests touching `desktop/**` (narrow paths filter) run the same builds without releasing — the pre-merge verification path; `workflow_dispatch` is the post-merge manual knob (GitHub only registers dispatch for workflows already on the default branch, so branch dispatch before first merge is not a thing).
+
+**The api URL baked into installers:** workflow default `https://synapse-api-0lf4.onrender.com/graphql` — the REAL deployed service (Render suffixes the name `-0lf4`; the value was extracted from the live web bundle's baked `VITE_API_URL` and verified `health: ok`, 2026-11-15) — overridable by the repo variable `DESKTOP_API_URL` (Settings → Secrets and variables → Actions → Variables) — changing the api address means updating the variable, not code.
+
+### [owner] One-time ops（第一次下载产物冒烟之前做完）
+
+- [ ] **[owner]** Render → `synapse-api` → Environment → `CORS_ORIGIN`: append `,app://synapse` (keep the Pages origin — the value is a comma-separated list since epic 38; §6 posture otherwise unchanged). Redeploys on save; verify with §6's probe using `Origin: app://synapse`.
+- [ ] **[owner]** R2 bucket → CORS policy: add AllowedOrigin `app://synapse` alongside the Pages origin (methods GET/PUT/HEAD, AllowedHeaders `*` — same rule shape as §2.2's). Presigned upload/download PUTs go browser→R2 directly from the shell; without this, uploads fail after login works.
+
+**Contingency** (documented, not built): if R2 ever refuses the custom-scheme origin at runtime, the four direct-fetch sites (`material-queries.ts` ×2, `use-parse-material.ts`, `ReaderPage.tsx`) get a preload bridge through Electron's `net` (no CORS) — a small follow-up ticket, not an env change.
+
+### Not in scope (deliberate, D6)
+
+- Code signing / notarization (Apple Developer $99/yr, Windows certificate) — installers stay unsigned; the release notes explain the two one-time bypass clicks.
+- Auto-update (electron-updater against GitHub Releases) — downloads are pull-based from the Releases page for now.
+

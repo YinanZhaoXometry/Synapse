@@ -13,8 +13,10 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { nextLanguage, useLanguage } from "@/contexts/LanguageContext";
-import { PLANS_HOME_ROUTE } from "@/features/plans/entry-decision";
 import { cn } from "@/lib/utils";
+
+/** The front door once onboarding is complete (AD-8; once entry-decision.ts's). */
+export const PLANS_HOME_ROUTE = "/plans";
 
 type GoalId = "exam" | "understand" | "revise" | "practice";
 

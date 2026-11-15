@@ -1,0 +1,33 @@
+# electron-builder config (epic 38) — consumed by `npx electron-builder --mac`
+# / `--win` from desktop/. The SPA bundle is NOT a source of this package: the
+# build stages frontend/dist → desktop/dist first (justfile desktop-dist /
+# the workflow's staging step), and `files` packs it into the asar (fs reads
+# asar paths transparently in the main process). package.json rides along by
+# default; devDeps (electron, electron-builder) never enter the bundle.
+appId: com.littlestep.synapse
+productName: Synapse
+directories:
+  output: release
+files:
+  - main.cjs
+  - dist/**/*
+asar: true
+compression: normal
+icon: buildResources/icon.png
+artifactName: "Synapse-${version}-${arch}.${ext}"
+mac:
+  category: public.app-category.education
+  # Unsigned (epic decision D6): macOS shows the right-click→Open notice on
+  # first launch; release notes carry the instructions. null = never attempt
+  # codesigning even when a CI machine happens to have an identity.
+  identity: null
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: true
+  artifactName: "Synapse-Setup-${version}-${arch}.${ext}"
