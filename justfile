@@ -75,9 +75,10 @@ desktop:
 # Package the macOS desktop build: builds the SPA with the deployed api URL
 # baked in (VITE_API_URL — override with SYNAPSE_DESKTOP_API_URL; must end in
 # /graphql, sse-client derives /api/stream from it), stages dist into the
-# shell, runs electron-builder → desktop/release/*.dmg (unsigned: right-click
-# → Open on first launch). The dmg talks to the DEPLOYED api — its CORS_ORIGIN
-# must include app://synapse (docs/deploy.md §12).
+# shell, runs electron-builder → desktop/release/*.dmg. The dmg talks to the
+# DEPLOYED api — its CORS_ORIGIN must include app://synapse (docs/deploy.md
+# §12). First launch on a downloaded copy needs the quarantine clear — see
+# the release notes template (.github/workflows/desktop-release-notes.md).
 desktop-dist:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -86,6 +87,27 @@ desktop-dist:
     rm -rf desktop/dist
     cp -R frontend/dist desktop/dist
     (cd desktop && npm run dist:mac)
+
+# Publish a desktop release — the industry posture: releases are TAG-driven,
+# not per-merge. Bump desktop/package.json's version and commit it first;
+# this pushes the matching desktop-v<version> tag, and desktop-release.yml
+# builds mac+win and publishes the GitHub Release under that tag.
+desktop-release:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version="$(jq -r .version desktop/package.json)"
+    tag="desktop-v${version}"
+    if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+      echo "just: tag ${tag} already exists — bump desktop/package.json's version (and commit) first" >&2
+      exit 1
+    fi
+    if ! git diff --quiet && ! git diff --cached --quiet; then
+      echo "just: working tree is dirty — commit first (the tag must point at a merged commit)" >&2
+      exit 1
+    fi
+    git tag "$tag"
+    git push origin "$tag"
+    echo "tagged ${tag} — watch the Desktop Release workflow publish it"
 
 # Compose postgres + backend; returns once the backend actually answers the health query.
 up:

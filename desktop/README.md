@@ -40,15 +40,15 @@ never as a source.
 - `ELECTRON_MIRROR` — e.g. `https://npmmirror.com/mirrors/electron/` when the
   electron binary download is slow (local networks only; CI doesn't need it).
 
-## Releases
+## Releases — tag-driven (industry posture), not per-merge
 
-`.github/workflows/desktop-release.yml` fires after CI completes green on
-`main` (via `workflow_run`): mac + win build the merge commit, and a
-`desktop-v<N>` GitHub Release ships `Synapse-<ver>-arm64.dmg`,
-`Synapse-<ver>-x64.dmg`, `Synapse-Setup-<ver>-x64.exe`. Pull requests that
-touch `desktop/**` (narrow paths filter) run the same builds without
-releasing — the pre-merge verification path; `workflow_dispatch` is the
-post-merge manual knob (releases only when dispatched on `main`).
+Merges to `main` accumulate without releasing. A release happens when a
+`desktop-v<version>` tag is pushed: bump `desktop/package.json`'s version,
+commit/merge it, then run `just desktop-release` (it tags + pushes). The
+workflow builds mac + win and publishes the GitHub Release under that exact
+tag, marked latest; a guard step fails the release if the tag's version
+doesn't match `package.json`. Pull requests touching `desktop/**` (narrow
+paths filter) and `workflow_dispatch` runs are build-only verification.
 
 ## Origins / CORS (the one deploy dependency)
 
