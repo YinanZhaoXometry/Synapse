@@ -518,7 +518,13 @@ module Ai
       end
 
       def language_word(language)
-        language == "zh" ? "简体中文" : "English"
+        case language
+        when "zh" then "简体中文"
+        # Traditional Chinese (owner bug round 2026-11-15): the zh-TW UI locale
+        # prompts for the traditional script, not a mere translation note.
+        when "zh-TW" then "繁體中文"
+        else "English"
+        end
       end
 
       def mode_rule(mode)

@@ -55,7 +55,7 @@ function loadProcessor() {
 
 /** Fallback title for the text before the first heading (bilingual, NFR-5). */
 function introTitle(language: UiLanguage): string {
-  return language === "en" ? "Introduction" : "开头";
+  return language === "en" ? "Introduction" : language === "zh-TW" ? "開頭" : "开头";
 }
 
 /** One rendered heading: its rehype-slug id and where its source begins. */

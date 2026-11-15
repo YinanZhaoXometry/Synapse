@@ -4,7 +4,11 @@
  */
 import type { ReadingLocator, ReadingPosition } from "@/domain/entities";
 
-export type UiLanguage = "zh" | "en";
+// The AI request's reply-language vocabulary — mirrors the backend's
+// Ai::LANGUAGES (owner bug round 2026-11-15 added the traditional-Chinese
+// locale; the directive names the script 繁體中文 through the ONE
+// language_word helper).
+export type UiLanguage = "zh" | "en" | "zh-TW";
 
 export type CompanionIntent =
   | "explain" // scaffolded explanation, hint-first

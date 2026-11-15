@@ -12,7 +12,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { NAV_ROUTES, SETTINGS_ROUTE } from "@/components/layout/nav-items";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { nextLanguage, useLanguage } from "@/contexts/LanguageContext";
 
 interface Props {
   open: boolean;
@@ -119,7 +119,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
           <CommandGroup heading={t("command.groupActions")}>
             <CommandItem
               value={t("command.toggleLanguage")}
-              onSelect={() => run(() => setLanguage(language === "zh" ? "en" : "zh"))}
+              onSelect={() => run(() => setLanguage(nextLanguage(language)))}
               className="group"
             >
               <Globe className="w-4 h-4 text-muted-foreground transition-colors group-data-[selected=true]:text-accent-ink" />

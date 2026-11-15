@@ -12,7 +12,7 @@ import {
   Target,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { nextLanguage, useLanguage } from "@/contexts/LanguageContext";
 import { PLANS_HOME_ROUTE } from "@/features/plans/entry-decision";
 import { cn } from "@/lib/utils";
 
@@ -66,7 +66,7 @@ export default function OnboardingPage() {
           </div>
           <button
             type="button"
-            onClick={() => setLanguage(language === "zh" ? "en" : "zh")}
+            onClick={() => setLanguage(nextLanguage(language))}
             aria-label={t("common.switchLang")}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full border border-border-soft bg-[var(--glass-4)] px-3 py-[7px] text-xs font-semibold text-muted-foreground",

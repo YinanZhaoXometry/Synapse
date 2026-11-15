@@ -24,7 +24,7 @@ function pageTitle(pageText: string, pageNumber: number, language: UiLanguage): 
     .map((line) => line.trim())
     .find((line) => line.length > 0);
   if (first && first.length <= HEADING_MAX_CHARS && !SENTENCE_END.test(first)) return first;
-  return language === "en" ? `Page ${pageNumber}` : `第 ${pageNumber} 页`;
+  return language === "en" ? `Page ${pageNumber}` : language === "zh-TW" ? `第 ${pageNumber} 頁` : `第 ${pageNumber} 页`;
 }
 
 export async function parsePdf(bytes: Uint8Array, language: UiLanguage): Promise<MaterialSection[]> {

@@ -33,13 +33,13 @@ const TEXT_RUN = /<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g;
 /** Visual-content signals for a text-less slide: a picture shape or any blip fill. */
 const VISUAL_SIGNAL = /<p:pic[\s>]|<a:blip[\s>]/;
 
-const notesLabel = (language: UiLanguage): string => (language === "en" ? "Notes: " : "备注：");
+const notesLabel = (language: UiLanguage): string => (language === "en" ? "Notes: " : language === "zh-TW" ? "備註：" : "备注：");
 const limitationText = (language: UiLanguage): string =>
   language === "en"
     ? "No text on this slide; image content won't appear in the extracted text."
     : "本页无文本内容；图片内容不会出现在提取结果中。";
 const fallbackTitle = (n: number, language: UiLanguage): string =>
-  language === "en" ? `Page ${n}` : `第 ${n} 页`;
+  language === "en" ? `Page ${n}` : language === "zh-TW" ? `第 ${n} 頁` : `第 ${n} 页`;
 
 /** All `<a:t>` run texts of one XML part, in document order. */
 function runTexts(xml: string): string[] {
