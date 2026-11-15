@@ -1,0 +1,189 @@
+# Desktop Release (epic 38) — one GitHub Release per green merge to main.
+#
+# Trigger chain: CI completes → workflow_run fires → guard admits only
+# (event=push, head_branch=main, conclusion=success) → mac + win build the
+# SAME head_sha → the release job publishes a desktop-v<N> tag with the three
+# artifacts and marks it latest. workflow_dispatch builds without releasing
+# on any branch (release ONLY when dispatched on main) — that is the
+# pre-merge verification path for both installers; the gates themselves live
+# in ci.yml and are what "green merge" refers to.
+#
+# No repository secrets: the api URL default is the real deployed service
+# (synapse-api-0lf4 — extracted from the live web bundle 2026-11-15),
+# overridable via the DESKTOP_API_URL repo variable; publishing uses the
+# workflow's GITHUB_TOKEN (job-scoped contents: write).
+name: Desktop Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-release-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: true
+
+env:
+  # The api the desktop bundle is baked against: repo variable wins so a
+  # moved/renamed api never needs a code change. Must end in /graphql —
+  # sse-client.ts derives the /api/stream endpoint from it.
+  DESKTOP_API_URL: ${{ vars.DESKTOP_API_URL || 'https://synapse-api-0lf4.onrender.com/graphql' }}
+
+jobs:
+  guard:
+    name: guard (build? release?)
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.decide.outputs.sha }}
+      should_build: ${{ steps.decide.outputs.should_build }}
+      should_release: ${{ steps.decide.outputs.should_release }}
+    steps:
+      - name: Decide
+        id: decide
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              echo "should_release=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "should_release=false" >> "$GITHUB_OUTPUT"
+            fi
+          elif [ "${{ github.event.workflow_run.event }}" = "push" ] \
+            && [ "${{ github.event.workflow_run.head_branch }}" = "main" ] \
+            && [ "${{ github.event.workflow_run.conclusion }}" = "success" ]; then
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: build (${{ matrix.name }})
+    needs: guard
+    if: needs.guard.outputs.should_build == 'true'
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: macos
+            os: macos-latest
+            builder_args: --mac
+            artifact_name: desktop-macos
+            artifact_glob: release/*.dmg
+          - name: windows
+            os: windows-latest
+            builder_args: --win
+            artifact_name: desktop-windows
+            artifact_glob: release/*.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.guard.outputs.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            desktop/package-lock.json
+
+      # electron's postinstall downloads the runtime per install; the cache
+      # keeps repeat builds off the network. electron-builder's own tooling
+      # cache rides along (windows).
+      - name: Cache electron binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('desktop/package-lock.json') }}
+
+      - name: Build the SPA (baked VITE_API_URL)
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+        env:
+          VITE_API_URL: ${{ env.DESKTOP_API_URL }}
+
+      - name: Stage the SPA into the shell
+        shell: bash
+        run: |
+          rm -rf desktop/dist
+          cp -R frontend/dist desktop/dist
+
+      - name: Install shell deps
+        working-directory: desktop
+        run: npm ci
+
+      - name: electron-builder (${{ matrix.name }})
+        working-directory: desktop
+        run: npx electron-builder ${{ matrix.builder_args }}
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: desktop/${{ matrix.artifact_glob }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: release (GitHub Release)
+    needs: [guard, build]
+    if: needs.guard.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.guard.outputs.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Compose release notes
+        run: |
+          SHA="${{ needs.guard.outputs.sha }}"
+          TAG="desktop-v${{ github.run_number }}"
+          SUBJECT="$(git log -1 --format=%s "$SHA")"
+          PREV="$(git tag --list 'desktop-v*' --sort=-creatordate | grep -v "^${TAG}$" | head -n1 || true)"
+          {
+            echo "Synapse Desktop build ${{ github.run_number }} — ${SUBJECT}"
+            echo
+            echo "## Commits"
+            echo
+            if [ -n "$PREV" ]; then
+              git log --oneline "${PREV}..${SHA}"
+            else
+              git log --oneline "$SHA" | head -n 20
+              echo "_first desktop release — latest 20 commits only_"
+            fi
+            echo
+            cat .github/workflows/desktop-release-notes.md
+          } > release-notes.md
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" \
+            artifacts/desktop-macos/*.dmg \
+            artifacts/desktop-windows/*.exe \
+            --target "$SHA" \
+            --title "Synapse Desktop ${{ github.run_number }}" \
+            --notes-file release-notes.md \
+            --latest
