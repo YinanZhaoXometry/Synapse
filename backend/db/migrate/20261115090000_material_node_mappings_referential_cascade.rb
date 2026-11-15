@@ -8,11 +8,15 @@
 # sweeps stay in place (the architecture's explicit deepest-first ordering);
 # this migration makes the same contract a database floor, so no current or
 # future path can violate it.
+#
+# strong_migrations two-step dance (the standing pattern — the
+# plan_scoped_chat_threads precedent): the cascading FKs re-added
+# validate: false here and validated by the follow-up migration.
 class MaterialNodeMappingsReferentialCascade < ActiveRecord::Migration[8.1]
   def change
     remove_foreign_key :material_node_mappings, :knowledge_nodes, column: :node_id
-    add_foreign_key :material_node_mappings, :knowledge_nodes, column: :node_id, on_delete: :cascade
+    add_foreign_key :material_node_mappings, :knowledge_nodes, column: :node_id, on_delete: :cascade, validate: false
     remove_foreign_key :material_node_mappings, :materials
-    add_foreign_key :material_node_mappings, :materials, on_delete: :cascade
+    add_foreign_key :material_node_mappings, :materials, on_delete: :cascade, validate: false
   end
 end
