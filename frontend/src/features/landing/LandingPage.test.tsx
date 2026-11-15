@@ -192,3 +192,60 @@ describe("LandingPage — the marketing root", () => {
     expect(dots).toHaveLength(0);
   });
 });
+
+describe("LandingPage — round 6 polish", () => {
+  it("the hero map's connectors are curves with socket dots, and satellites split primary/secondary", async () => {
+    renderLanding();
+    await screen.findByText(zh["landing.hero.lead"]);
+    const map = document.querySelector(".lp-knowledge-map svg")!;
+    // Four center→satellite edges as quadratic curves (round 6: was straight lines).
+    const curves = Array.from(map.querySelectorAll("path")).filter((p) => (p.getAttribute("d") || "").includes("Q"));
+    expect(curves.length).toBeGreaterThanOrEqual(6); // 4 edges + 2 cross arcs
+    // Socket dots terminate every edge (r=2.5 terminators, round 6).
+    const sockets = Array.from(map.querySelectorAll("circle")).filter((c) => c.getAttribute("r") === "2.5");
+    expect(sockets.length).toBeGreaterThanOrEqual(10);
+    // The two secondary satellites step back (soft border + smaller frame).
+    const rects = Array.from(map.querySelectorAll("rect"));
+    const secondary = rects.filter((r) => r.getAttribute("stroke") === "var(--lp-border-soft)");
+    expect(secondary).toHaveLength(2);
+    expect(secondary.every((r) => r.getAttribute("height") === "48")).toBe(true);
+  });
+
+  it("the download platform row is honest: shipping platforms full, mobile dimmed + soon chip", async () => {
+    renderLanding();
+    await screen.findByText(zh["landing.hero.lead"]);
+    const soon = screen.getByText("iOS / Android");
+    expect(soon).toHaveClass("lp-platform-soon");
+    expect(screen.getByText(zh["landing.download.soon"])).toBeVisible();
+    // The open-source trust line rides under the platform row.
+    const oss = screen.getByRole("link", { name: zh["landing.download.openSource"] });
+    expect(oss).toHaveAttribute("href", "https://github.com/YinanZhaoXometry/Synapse");
+  });
+
+  it("the capabilities intro carries the meta lines and the FAQ column a GitHub fallback", async () => {
+    renderLanding();
+    await screen.findByText(zh["landing.hero.lead"]);
+    expect(screen.getByText(zh["landing.features.meta1"])).toBeVisible();
+    expect(screen.getByText(zh["landing.features.meta2"])).toBeVisible();
+    const fallback = screen.getByRole("link", { name: new RegExp(zh["landing.faq.moreLink"]) });
+    expect(fallback).toHaveAttribute("href", "https://github.com/YinanZhaoXometry/Synapse/issues");
+  });
+
+  it("the footer repeats the download CTA and closes with a copyright line", async () => {
+    renderLanding();
+    await screen.findByText(zh["landing.hero.lead"]);
+    const footer = document.querySelector(".lp-footer")!;
+    const download = footer.querySelector(`a[href="https://github.com/YinanZhaoXometry/Synapse/releases"]`);
+    expect(download).toBeTruthy();
+    expect(screen.getByText(zh["landing.footer.copyright"])).toBeVisible();
+  });
+
+  it("the demo sidebar grows a second rail group and the organize panel a fifth concept chip", async () => {
+    renderLanding();
+    await screen.findByText(zh["landing.hero.lead"]);
+    expect(screen.getByText(zh["landing.preview.rail.label2"], { selector: ".lp-rail-group .lp-space-label" })).toBeVisible();
+    expect(screen.getByText(zh["landing.preview.rail.item5"])).toBeVisible();
+    // 遗忘曲线 also names a hero-map satellite — scope to the concept chip.
+    expect(screen.getByText(zh["landing.preview.organize.concept5"], { selector: ".lp-concept-chip" })).toBeVisible();
+  });
+});

@@ -78,7 +78,8 @@ html.lp-active {
   --lp-text-hero: clamp(2.5rem, 5vw, 3.75rem);
   --lp-text-section: clamp(1.875rem, 3.25vw, 2.5rem);
   --lp-leading-body: 1.6;
-  --lp-leading-display: 1.12;
+  /* round 6: 1.12 let CJK headline commas kiss the next line */
+  --lp-leading-display: 1.2;
   --lp-tracking-display: -0.05em;
   /* spacing — larger section rhythm */
   --lp-space-1: 4px;
@@ -500,8 +501,8 @@ html.lp-active {
   letter-spacing: -0.04em;
 }
 .lp-brand-tag {
-  margin-left: 2px;
-  padding-left: 12px;
+  margin-left: 6px;
+  padding-left: 10px;
   border-left: 1px solid var(--lp-border);
   color: var(--lp-fg-2);
   font-size: var(--lp-text-xs);
@@ -574,6 +575,18 @@ html.lp-active {
   position: relative;
   overflow: clip;
 }
+/* the page's one entrance moment (round 6) — copy leads, board follows; the
+ * reduce-motion rules at the foot of this file collapse it to nothing */
+@keyframes lp-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 /* the centered single-column hero: copy on top, the wide board beneath */
 .lp-hero-grid {
   display: grid;
@@ -585,6 +598,7 @@ html.lp-active {
   max-width: 860px;
   margin-inline: auto;
   text-align: center;
+  animation: lp-rise-in 480ms var(--lp-ease-standard) both;
 }
 .lp-hero-copy .lp-eyebrow {
   justify-content: center;
@@ -649,6 +663,7 @@ html.lp-active {
   width: min(100%, 1080px);
   min-width: 0;
   margin-inline: auto;
+  animation: lp-rise-in 480ms var(--lp-ease-standard) 90ms both;
 }
 .lp-hero-visual::before {
   content: "";
@@ -684,10 +699,10 @@ html.lp-active {
   gap: 6px;
 }
 .lp-window-dot {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.22);
 }
 .lp-window-dot:first-child {
   background: var(--lp-accent);
@@ -860,7 +875,20 @@ html.lp-active {
   left: 12.5%;
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--lp-map-line), transparent);
-  opacity: 0.55;
+  opacity: 0.8;
+}
+/* the loop's closing cue — a small restart glyph past the last step, so the
+ * "环环相扣" copy gains a visible path back to step one (desktop only) */
+.lp-loop-grid::after {
+  content: "↺";
+  position: absolute;
+  top: 5px;
+  left: calc(87.5% + 20px);
+  color: var(--lp-map-line);
+  font-family: var(--lp-font-mono);
+  font-size: 15px;
+  line-height: 30px;
+  opacity: 0.7;
 }
 .lp-loop-step {
   position: relative;
@@ -918,23 +946,62 @@ html.lp-active {
   position: sticky;
   top: 120px;
 }
+/* quiet factual meta anchoring the sticky column's lower half */
+.lp-capabilities-meta {
+  display: grid;
+  gap: 10px;
+  margin-top: var(--lp-space-8);
+  padding: 0;
+  list-style: none;
+}
+.lp-capabilities-meta li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--lp-text-subtle);
+  font-family: var(--lp-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+.lp-capabilities-meta li::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  flex: none;
+  border-radius: var(--lp-radius-pill);
+  background: var(--lp-map-line);
+}
 .lp-capability-list {
   border-top: 1px solid var(--lp-border);
 }
 .lp-capability {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
   gap: var(--lp-space-5);
   align-items: center;
   padding-block: 32px;
+  padding-inline: var(--lp-space-2);
+  margin-inline: calc(var(--lp-space-2) * -1);
+  border-radius: var(--lp-radius-md);
   border-bottom: 1px solid var(--lp-border);
+  transition: background-color var(--lp-motion-fast) var(--lp-ease-standard);
+}
+/* the whole row reads as the interactive unit, not just the trailing link */
+.lp-capability:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+.lp-capability:hover .lp-text-link {
+  color: var(--lp-fg);
+}
+.lp-capability:hover .lp-text-link .lp-icon {
+  transform: translateX(3px);
 }
 /* the capability row's lead icon (round 3: replaces the row number) */
 .lp-capability-number {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   align-self: start;
   border: 1px solid var(--lp-border-soft);
   border-radius: 10px;
@@ -976,11 +1043,11 @@ html.lp-active {
 .lp-window {
   margin-top: 48px;
   overflow: hidden;
-  border: 1px solid var(--lp-border);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: var(--lp-radius-window);
-  background: var(--lp-surface);
+  background: #121316;
   color: var(--lp-fg);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055), var(--lp-shadow-stage);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), var(--lp-shadow-stage);
 }
 .lp-toolbar {
   display: flex;
@@ -1071,6 +1138,31 @@ html.lp-active {
   margin-top: auto;
   padding: var(--lp-space-4) var(--lp-space-3) 0;
   border-top: 1px solid var(--lp-border-soft);
+}
+/* a second rail group (round 6): static rows that make the sidebar read as a
+ * product surface instead of a bare nav demo */
+.lp-rail-group {
+  margin-top: var(--lp-space-5);
+}
+.lp-rail-rows {
+  display: grid;
+  gap: 2px;
+  margin: var(--lp-space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.lp-rail-rows li {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--lp-radius-sm);
+  color: var(--lp-text-subtle);
+  font-size: 13px;
+}
+.lp-rail-rows li svg {
+  opacity: 0.75;
 }
 .lp-sidebar-note-title {
   color: var(--lp-fg-2);
@@ -1348,7 +1440,7 @@ html.lp-active {
   min-width: 0;
   flex-direction: column;
   padding: var(--lp-space-8);
-  border: 1px solid var(--lp-border-soft);
+  border: 1px solid rgba(255, 255, 255, 0.095);
   border-radius: var(--lp-radius-lg);
   background: var(--lp-surface);
   transition: transform var(--lp-motion-base) var(--lp-ease-standard), border-color var(--lp-motion-base) var(--lp-ease-standard),
@@ -1356,7 +1448,7 @@ html.lp-active {
 }
 .lp-scenario-card:hover {
   transform: translateY(-3px);
-  border-color: var(--lp-border);
+  border-color: rgba(255, 99, 99, 0.28);
   background: #141518;
 }
 .lp-scenario-card:nth-child(2) {
@@ -1381,7 +1473,7 @@ html.lp-active {
 .lp-scenario-quote {
   margin-top: var(--lp-space-4);
   font-family: var(--lp-font-display);
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 500;
   line-height: 1.55;
   letter-spacing: -0.025em;
@@ -1428,11 +1520,11 @@ html.lp-active {
   position: relative;
   overflow: hidden;
   padding: 80px 48px;
-  border: 1px solid var(--lp-border);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 24px;
   background: var(--lp-gradient-download);
   color: var(--lp-fg);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), var(--lp-shadow-stage);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), var(--lp-shadow-stage);
 }
 .lp-download-panel::before {
   content: "";
@@ -1442,7 +1534,7 @@ html.lp-active {
   width: 480px;
   height: 320px;
   border-radius: 50%;
-  background: rgba(255, 99, 99, 0.12);
+  background: rgba(255, 99, 99, 0.15);
   filter: blur(72px);
   transform: translateX(-50%);
   pointer-events: none;
@@ -1507,6 +1599,42 @@ html.lp-active {
   font-weight: 500;
   letter-spacing: 0.04em;
 }
+/* future platforms step back and say so — matching the note above and what
+ * Releases actually hosts (honesty over confidence) */
+.lp-platform-soon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0.55;
+}
+.lp-soon-chip {
+  padding: 2px 7px;
+  border: 1px solid var(--lp-border-soft);
+  border-radius: var(--lp-radius-pill);
+  color: var(--lp-text-subtle);
+  font-family: var(--lp-font-body);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+/* the open-source trust line under the platform row */
+.lp-download-oss {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: var(--lp-space-5);
+  color: var(--lp-fg-2);
+  font-size: var(--lp-text-sm);
+  font-weight: 500;
+  transition: color var(--lp-motion-fast) var(--lp-ease-standard);
+}
+.lp-download-oss:hover {
+  color: var(--lp-fg);
+}
+.lp-download-oss .lp-icon {
+  --lp-icon-size: 15px;
+}
 
 .lp-faq-layout {
   display: grid;
@@ -1570,6 +1698,39 @@ html.lp-active {
   font-size: var(--lp-text-base);
   line-height: 1.8;
 }
+/* the intro column's fallback card — for questions the accordion misses */
+.lp-faq-more {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: var(--lp-space-8);
+  padding: var(--lp-space-5);
+  border: 1px solid var(--lp-border-soft);
+  border-radius: var(--lp-radius-md);
+  background: rgba(255, 255, 255, 0.018);
+  transition: border-color var(--lp-motion-fast) var(--lp-ease-standard),
+    background-color var(--lp-motion-fast) var(--lp-ease-standard);
+}
+.lp-faq-more:hover {
+  border-color: var(--lp-border);
+  background: rgba(255, 255, 255, 0.03);
+}
+.lp-faq-more-title {
+  color: var(--lp-fg);
+  font-size: var(--lp-text-base);
+  font-weight: 600;
+}
+.lp-faq-more-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lp-space-2);
+  color: var(--lp-accent-ink);
+  font-size: var(--lp-text-sm);
+  font-weight: 600;
+}
+.lp-faq-more-link .lp-icon {
+  --lp-icon-size: 15px;
+}
 
 .lp-footer {
   border-top: 1px solid var(--lp-border-soft);
@@ -1603,6 +1764,7 @@ html.lp-active {
 .lp-footer-nav {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--lp-space-5);
   color: var(--lp-fg-2);
   font-size: var(--lp-text-sm);
@@ -1615,6 +1777,22 @@ html.lp-active {
 }
 .lp-footer-nav a:hover {
   color: var(--lp-accent-ink);
+}
+/* separates the product anchors from the actions (download / top / GitHub) */
+.lp-footer-sep {
+  width: 1px;
+  height: 16px;
+  flex: none;
+  background: var(--lp-border);
+}
+.lp-footer-bottom {
+  padding-block: 0 var(--lp-space-6);
+}
+.lp-footer-copyright {
+  color: var(--lp-text-subtle);
+  font-family: var(--lp-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
 }
 
 @media (hover: hover) {
@@ -1683,7 +1861,8 @@ html.lp-active {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 48px 40px;
   }
-  .lp-loop-grid::before {
+  .lp-loop-grid::before,
+  .lp-loop-grid::after {
     display: none;
   }
   .lp-capabilities-layout {
@@ -1729,7 +1908,8 @@ html.lp-active {
     width: auto;
     flex: none;
   }
-  .lp-sidebar-note {
+  .lp-sidebar-note,
+  .lp-rail-group {
     display: none;
   }
   .lp-scenario-grid {
@@ -1796,8 +1976,10 @@ html.lp-active {
     gap: 6px;
   }
   /* the phone header keeps: brand · EN · 下载 · burger — the login link
-   * lives in the burger menu (round 3, making room for the lang toggle) */
-  .lp-login-link {
+   * lives in the burger menu (round 3, making room for the lang toggle), and
+   * the GitHub ghost folds into the menu too (round 6) */
+  .lp-login-link,
+  .lp-ghost-gh {
     display: none;
   }
   .lp-header-actions .lp-btn-sm {
@@ -1860,6 +2042,18 @@ html.lp-active {
   }
   .lp-knowledge-map {
     margin-top: var(--lp-space-4);
+  }
+  /* the map's sub-labels fall under ~7px here — drop them and let the titles
+   * carry the nodes alone; edges brighten to survive the smaller canvas */
+  .lp-knowledge-map .lp-map-sub {
+    display: none;
+  }
+  .lp-knowledge-map .lp-map-title {
+    font-size: 19px;
+    transform: translateY(5px);
+  }
+  .lp-knowledge-map .lp-map-edges {
+    opacity: 0.92;
   }
   .lp-board-next {
     grid-template-columns: auto minmax(0, 1fr);

@@ -139,7 +139,7 @@ export function LandingHeader() {
             </DropdownMenuPrimitive.Content>
           </DropdownMenuPrimitive.Root>
           <a
-            className="lp-ghost-btn"
+            className="lp-ghost-btn lp-ghost-gh"
             href={LANDING_REPO_URL}
             target="_blank"
             rel="noreferrer"
@@ -177,7 +177,6 @@ export function LandingHeader() {
               <GithubIcon /> GitHub
             </a>
             <Link className="lp-nav-link" to="/login" onClick={() => setMenuOpen(false)}>
-
               {t("landing.header.login")}
             </Link>
           </nav>
