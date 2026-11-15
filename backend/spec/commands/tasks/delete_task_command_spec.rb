@@ -28,10 +28,18 @@ RSpec.describe Tasks::DeleteTaskCommand do
   let!(:marking) { create(:section_marking, user: user, material: task.material) }
   let!(:progress) { create(:reading_progress, user: user, material: task.material) }
   let!(:thread) { create(:chat_thread, user: user, material: task.material) }
+  # FR-45's auto-mapping rows hang off BOTH sides of the triangle's deletion
+  # (node-bound confirmed rows and node-null gap rows) — the sweep the owner
+  # bug round 2026-11-15 uncovered as missing.
+  let!(:mapping) { create(:material_node_mapping, :confirmed, user: user, material: task.material, node: task.node) }
+  let!(:gap_mapping) do
+    create(:material_node_mapping, user: user, material: task.material, section_id: "sec-2", proposed_node_title: "Gap")
+  end
 
   # Survivors: another user's task triangle must be untouched.
   let(:other) { create(:user) }
   let!(:foreign_task) { create(:study_task, user: other) }
+  let!(:foreign_mapping) { create(:material_node_mapping, user: other, material: foreign_task.material, node: foreign_task.node) }
 
   def call(overrides = {})
     described_class.call(current_user: user, id: task.id, **overrides)
@@ -56,6 +64,8 @@ RSpec.describe Tasks::DeleteTaskCommand do
       expect(SectionMarking.exists?(marking.id)).to be(false)
       expect(ReadingProgress.exists?(progress.id)).to be(false)
       expect(ChatThread.exists?(thread.id)).to be(false)
+      expect(MaterialNodeMapping.exists?(mapping.id)).to be(false)
+      expect(MaterialNodeMapping.exists?(gap_mapping.id)).to be(false)
     end
 
     it "leaves other users' task triangles alone" do
@@ -64,6 +74,7 @@ RSpec.describe Tasks::DeleteTaskCommand do
       expect(StudyTask.exists?(foreign_task.id)).to be(true)
       expect(Material.exists?(foreign_task.material_id)).to be(true)
       expect(KnowledgeNode.exists?(foreign_task.node_id)).to be(true)
+      expect(MaterialNodeMapping.exists?(foreign_mapping.id)).to be(true)
     end
 
     it "fails NOT_FOUND for another user's task id and deletes nothing (delta 2)" do

@@ -28,6 +28,13 @@ RSpec.describe Plans::DeletePlanCommand do
   let!(:mistake) do
     create(:mistake_entry, user: user, question: question, node: node, session: session)
   end
+  # FR-45's auto-mapping rows hang off BOTH sides of the deletion (node-bound
+  # confirmed rows and node-null gap rows) — the sweep the owner bug round
+  # 2026-11-15 uncovered as missing.
+  let!(:mapping) { create(:material_node_mapping, :confirmed, user: user, material: material, node: node) }
+  let!(:gap_mapping) do
+    create(:material_node_mapping, user: user, material: material, section_id: "sec-2", proposed_node_title: "Vectors")
+  end
 
   # Survivors inside the same user's graph: the plan-free Study Task triangle
   # (AD-6 — its node has plan_id null) and a material that is not attached
@@ -41,6 +48,7 @@ RSpec.describe Plans::DeletePlanCommand do
   let!(:foreign_plan) { create(:study_plan, user: other) }
   let!(:foreign_node) { create(:knowledge_node, user: other, plan: foreign_plan) }
   let!(:foreign_material) { create(:material, user: other, plan: foreign_plan) }
+  let!(:foreign_mapping) { create(:material_node_mapping, user: other, material: foreign_material, node: foreign_node) }
 
   def call(overrides = {})
     described_class.call(current_user: user, id: plan.id, **overrides)
@@ -65,6 +73,8 @@ RSpec.describe Plans::DeletePlanCommand do
       expect(Question.exists?(question.id)).to be(false)
       expect(EvidenceRecord.exists?(evidence.id)).to be(false)
       expect(MistakeEntry.exists?(mistake.id)).to be(false)
+      expect(MaterialNodeMapping.exists?(mapping.id)).to be(false)
+      expect(MaterialNodeMapping.exists?(gap_mapping.id)).to be(false)
     end
 
     it "leaves the user's plan-free rows alone (task triangle, detached material)" do
@@ -83,6 +93,7 @@ RSpec.describe Plans::DeletePlanCommand do
       expect(StudyPlan.exists?(foreign_plan.id)).to be(true)
       expect(KnowledgeNode.exists?(foreign_node.id)).to be(true)
       expect(Material.exists?(foreign_material.id)).to be(true)
+      expect(MaterialNodeMapping.exists?(foreign_mapping.id)).to be(true)
     end
 
     it "fails NOT_FOUND for another user's plan id and deletes nothing (delta 2)" do
@@ -122,6 +133,7 @@ RSpec.describe Plans::DeletePlanCommand do
         expect(Flashcard.exists?(flashcard.id)).to be(true)
         expect(Annotation.exists?(annotation.id)).to be(true)
         expect(SectionMarking.exists?(marking.id)).to be(true)
+        expect(MaterialNodeMapping.exists?(mapping.id)).to be(true)
         expect(QuizSession.exists?(session.id)).to be(true)
         expect(Question.exists?(question.id)).to be(true)
         expect(EvidenceRecord.exists?(evidence.id)).to be(true)
