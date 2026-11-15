@@ -14,8 +14,8 @@ Additive third stack `desktop/`（Electron 壳）打包现有 SPA 构建指向�
 | --- | --- | --- |
 | D1 | 壳 = Electron | Chromium 渲染与 Web 版 100% 一致；纯 npm 工具链；~90MB 包体接受（弃 Tauri：本机/CI 需 Rust 工具链，收益只有包体） |
 | D2 | App origin | 自定义特权协议 `app://synapse`（standard+secure+supportFetchAPI）——BrowserRouter + crypto 安全上下文都要；**不用** file://（pushState 死）、不用本地 http 端口（端口冲突→CORS origin 不匹配） |
-| D3 | 构建期烤入的 API 地址 | `VITE_API_URL=https://synapse-api.onrender.com/graphql`（render.yaml 服务名推断）作为 workflow 默认值，仓库变量 `DESKTOP_API_URL` 可覆盖（改地址不动代码） |
-| D4 | 触发 | `workflow_run`(CI completed+success+event=push+head_branch=main) + `workflow_dispatch`（分支上=build-only 验证；main 上=手动发版） |
+| D3 | 构建期烤入的 API 地址 | `VITE_API_URL=https://synapse-api-0lf4.onrender.com/graphql`（**实测真值**：Render 给服务名加 `-0lf4` 后缀，从线上 Web bundle 烤入值挖出、health 探针验证 2026-11-15；裸服务名推断值 404 已弃）作为 workflow 默认值，仓库变量 `DESKTOP_API_URL` 可覆盖（改地址不动代码） |
+| D4 | 触发 | `workflow_run`(CI completed+success+event=push+head_branch=main) + `pull_request`（窄路径过滤 desktop/**+workflow+justfile，build-only——合入前双 OS 验证；实测 GitHub 只注册默认分支上的 workflow_dispatch，分支 dispatch 不可行）+ `workflow_dispatch`（合入后手动，仅 main 上发版） |
 | D5 | 标签/版本 | tag `desktop-v<run_number>`（单调）；in-app 版本 `desktop/package.json` `0.1.0` 静态；release notes 自带安装说明（mac Gatekeeper 右键打开 / win SmartScreen「仍要运行」） |
 | D6 | 不做 | 自动更新（electron-updater 后议）、代码签名/公证（Apple $99/年 + Windows 证书，正式分发前再说）、Linux |
 
@@ -36,6 +36,6 @@ Additive third stack `desktop/`（Electron 壳）打包现有 SPA 构建指向�
 ## Verification (AC)
 
 - 本地 dev 冒烟：`just dev` + `just desktop`——壳内全 app 走 Vite 代理同源，零 CORS 依赖。
-- 本地打包：`just desktop-dist` → dmg；CI dry-run：分支上 dispatch → mac+win build-only 绿（Windows 产物由此路验证）。
+- 本地打包：`just desktop-dist` → dmg；CI dry-run：PR 触发（路径过滤命中）→ mac+win build-only 绿（Windows 产物由此路验证）。
 - 合并后：CI 绿 → desktop-release 自动首跑 → release 三产物；arm64 dmg 连部署 API 全流程冒烟（含 PDF 上传 = R2 CORS 实证）。
 - `just spec` 零改动全绿（frontend/src 与 backend/ 不动）。

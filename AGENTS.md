@@ -13,10 +13,11 @@ Fresh restart repo (started from zero, Nov 2026). The previous BMad-era implemen
 ```
 frontend/  the Vite SPA — everything frontend
 backend/   the Rails 8.1 API-only service — see backend/AGENTS.md (its architecture contract)
+desktop/   the Electron shell (epic 38) — packages the SPA build; see desktop/README.md
 justfile  root orchestrator: just setup · dev · up · spec
 docs/     product/design/architecture/agents docs (stays at root)
 .scratch/ local issue tracker (stays at root)
-.github/  CI workflow(s) — web gates + api gates on push/PR to main
+.github/  CI workflow(s) — web gates + api gates on push/PR to main + desktop release on green merges to main
 ```
 
 ## Commands
@@ -30,6 +31,8 @@ just dev     # web Vite dev server (proxies /graphql to :3000 — bring the stac
 just up      # compose: postgres 17 + minio + api (api on port 3000)
 just migrate # db:migrate in the running api container — run after pulling migrations the stack booted before
 just spec    # web gates + api gates
+just desktop       # Electron dev shell (needs `just dev` running — loads the Vite server, zero CORS)
+just desktop-dist  # package the macOS dmg (SPA built against the deployed api; needs `cd desktop && npm ci` once)
 
 # Frontend gates (from frontend/ — two true invocation forms):
 # (sequence kept in sync with the justfile spec recipe + ci.yml web job)
@@ -74,6 +77,8 @@ Playwright e2e lives in `frontend/e2e/` (`just e2e` — one command: flips the b
 
 **`backend/`** — the Rails 8.1 GraphQL service (minimal bootable scaffold: one `health` query, committed `schema.graphql`, RSpec + RuboCop green). Its architecture contract — command-layer-first, error enum, naming, what lands with which epic — is [`backend/AGENTS.md`](backend/AGENTS.md). Read it before any backend work.
 
+**`desktop/`** — the Electron shell (epic 38): `main.cjs` serves the staged SPA build (`frontend/dist` → `desktop/dist`) from the `app://synapse` privileged scheme; electron-builder packs dmg (arm64/x64) + NSIS exe, unsigned. The whole app integration is the build-time `VITE_API_URL` — zero product-code changes. `.github/workflows/desktop-release.yml` publishes a GitHub Release (`desktop-v<N>` tag, marked latest) after every green CI run on `main`; `workflow_dispatch` on a branch = build-only verification. Deploy dependency (owner ops): the deployed api's `CORS_ORIGIN` and the R2 bucket CORS must allow `app://synapse` — docs/deploy.md §12.
+
 ## Conventions
 
 - **Path alias:** `@/*` → `src/*` (relative — it survived both monorepo moves unchanged). It is declared in four places that must stay in sync: `frontend/vite.config.ts`, `frontend/vitest.config.ts`, `frontend/tsconfig.json`, `frontend/tsconfig.app.json`.
@@ -99,7 +104,7 @@ Playwright e2e lives in `frontend/e2e/` (`just e2e` — one command: flips the b
 - **HMR error overlay is disabled** (`frontend/vite.config.ts`), so dev errors only appear in the terminal — watch it, not just the browser.
 - **Web dev server binds host `::` on port 8080** (not Vite's default 5173). The api serves on port 3000 (compose).
 - **`frontend/tsconfig.app.tsbuildinfo` / `frontend/tsconfig.node.tsbuildinfo` are committed** (policy unchanged — A6). Their contents are relative paths, so they survive the move; a stale one self-heals on the next `tsc -b` (regen verified byte-identical) — commit the regenerated file if a legit path change lands.
-- **CI** runs the same gates on GitHub Actions (push/PR to `main` and `epic/**`): web = `npm ci` → codegen (regenerate + diff — schema drift fails loudly) → `tsc -b` → eslint → vitest --coverage → `vite build` → mastery-vector anti-drift (regenerate + stamp-insensitive diff — same step `just spec` runs); api = rubocop → rspec (SimpleCov line floor lives in spec_helper); **e2e** (epic-17 T05) = compose demo stack + `compose.e2e.yaml` stub wiring → Playwright critical flows (retries 2 in CI, report/traces uploaded on failure). Keep local green before pushing.
+- **CI** runs the same gates on GitHub Actions (push/PR to `main` and `epic/**`): web = `npm ci` → codegen (regenerate + diff — schema drift fails loudly) → `tsc -b` → eslint → vitest --coverage → `vite build` → mastery-vector anti-drift (regenerate + stamp-insensitive diff — same step `just spec` runs); api = rubocop → rspec (SimpleCov line floor lives in spec_helper); **e2e** (epic-17 T05) = compose demo stack + `compose.e2e.yaml` stub wiring → Playwright critical flows (retries 2 in CI, report/traces uploaded on failure). Keep local green before pushing. Separately, **Desktop Release** (`desktop-release.yml`, epic 38) fires via `workflow_run` when CI goes green on a `main` push: mac+win build the merge commit and publish the installers as a GitHub Release — it gates on CI's conclusion, not on its jobs.
 - `backend/README.md` is still the Rails generator stub — the backend's real doc is `backend/AGENTS.md`.
 - ~~`lovable-tagger`~~ — the Lovable-scaffold residue was REMOVED 2026-11-06 (debt batch: devDependency + the dev-mode `componentTagger` Vite plugin + lockfile regen); `vite.config.ts` now carries only `react()`.
 

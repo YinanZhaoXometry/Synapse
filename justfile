@@ -64,6 +64,29 @@ minio-image:
 dev:
     cd frontend && npm run dev
 
+# Desktop shell (Electron, epic 38) in dev mode — run `just dev` FIRST: the
+# shell loads the Vite dev server, so /graphql + /api/stream ride the proxy
+# (same-origin — zero CORS, no deployed-stack dependency). First run needs
+# `cd desktop && npm ci` (electron download; slow networks: ELECTRON_MIRROR,
+# see desktop/README.md).
+desktop:
+    cd desktop && SYNAPSE_DESKTOP_DEV_URL=http://localhost:8080 npm run dev
+
+# Package the macOS desktop build: builds the SPA with the deployed api URL
+# baked in (VITE_API_URL — override with SYNAPSE_DESKTOP_API_URL; must end in
+# /graphql, sse-client derives /api/stream from it), stages dist into the
+# shell, runs electron-builder → desktop/release/*.dmg (unsigned: right-click
+# → Open on first launch). The dmg talks to the DEPLOYED api — its CORS_ORIGIN
+# must include app://synapse (docs/deploy.md §12).
+desktop-dist:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    api_url="${SYNAPSE_DESKTOP_API_URL:-https://synapse-api-0lf4.onrender.com/graphql}"
+    (cd frontend && VITE_API_URL="$api_url" npm run build)
+    rm -rf desktop/dist
+    cp -R frontend/dist desktop/dist
+    (cd desktop && npm run dist:mac)
+
 # Compose postgres + backend; returns once the backend actually answers the health query.
 up:
     #!/usr/bin/env bash
