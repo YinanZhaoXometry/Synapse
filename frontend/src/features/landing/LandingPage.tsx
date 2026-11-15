@@ -27,9 +27,15 @@ export default function LandingPage() {
 
   // Smooth-scroll + header scroll-padding live on <html> (the page's scroll
   // container), gated behind a landing-only class so the app is untouched.
+  // lp-boot-dark is the index.html boot script's anti-flash class: the landing
+  // claims it while mounted, the warm app canvas resumes on the way out.
   useEffect(() => {
-    document.documentElement.classList.add("lp-active");
-    return () => document.documentElement.classList.remove("lp-active");
+    const root = document.documentElement;
+    root.classList.add("lp-active");
+    return () => {
+      root.classList.remove("lp-active");
+      root.classList.remove("lp-boot-dark");
+    };
   }, []);
 
   // The landing owns its tab title (first per-page title in the app); restore
