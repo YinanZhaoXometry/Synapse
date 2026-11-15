@@ -62,6 +62,15 @@ import {
   apiErrorCode,
   apiErrorKeys,
   newClientUuid,
+  addAnnotationListUpdate,
+  buildAddAnnotationOptimistic,
+  buildClaimSectionOptimistic,
+  buildRemoveAnnotationOptimistic,
+  buildUnclaimSectionOptimistic,
+  claimSectionListUpdate,
+  newOptimisticAnnotationId,
+  newOptimisticMarkingId,
+  removeAnnotationListUpdate,
   useAddAnnotationMutation,
   useAnnotationsQuery,
   useClaimSectionMutation,
@@ -170,18 +179,33 @@ export default function ReaderPage() {
     [markingsQuery.data, openBySection],
   );
 
-  // Claim when unclaimed, unmark when claimed. Success stays silent — the
-  // green arriving via the read-back sweep IS the feedback; failure toasts
-  // honestly (sonner, AD-9).
+  // Claim when unclaimed, unmark when claimed — OPTIMISTICALLY (owner bug
+  // round 2026-11-15): the green lands on the click. The claim paints a temp
+  // full-shape row (the list update hands it to the server row on the
+  // response); the unmark paints the same cached row with clearedAt set.
+  // Success stays silent (the optimistic paint IS the feedback); a wire
+  // failure clears the optimistic layer and toasts honestly (sonner, AD-9).
   const handleToggleClaim = useCallback(
     (sectionId: string) => {
       if (!material) return;
-      const unmarking = openBySection.has(sectionId);
-      const mutate = unmarking ? unclaimSectionMutation : claimSectionMutation;
-      void mutate({
-        variables: { input: { materialId: material.id, sectionId } },
-        onError: () => toast.error(t(unmarking ? "marking.unmarkFailed" : "marking.claimFailed")),
-      });
+      const open = openBySection.get(sectionId);
+      if (open !== undefined) {
+        // The mapped view row IS the raw row's contract fields (id, materialId,
+        // sectionId, claimedAt) — no fragment read needed for the paint.
+        void unclaimSectionMutation({
+          variables: { input: { materialId: material.id, sectionId } },
+          optimisticResponse: buildUnclaimSectionOptimistic(open, new Date().toISOString()),
+          onError: () => toast.error(t("marking.unmarkFailed")),
+        });
+      } else {
+        const tempId = newOptimisticMarkingId();
+        void claimSectionMutation({
+          variables: { input: { materialId: material.id, sectionId } },
+          optimisticResponse: buildClaimSectionOptimistic(material.id, sectionId, tempId, new Date().toISOString()),
+          update: claimSectionListUpdate(material.id, tempId),
+          onError: () => toast.error(t("marking.claimFailed")),
+        });
+      }
     },
     [material, openBySection, claimSectionMutation, unclaimSectionMutation, t],
   );
@@ -527,8 +551,11 @@ export default function ReaderPage() {
 
   // The chips' handler: re-capture the LIVE selection (the bar kept it
   // alive through the click — the mousedown suppression), build the AD-2
-  // range through the engine's capture seam, and persist. The read-back
-  // sweep re-applies; the bar closes (the selection's job is done).
+  // range through the engine's capture seam, and persist — OPTIMISTICALLY
+  // (owner bug round 2026-11-15): the highlight paints on the click, the
+  // round-trip + read-back sweep run invisibly behind it, and a wire failure
+  // rolls the paint back with an honest toast (AD-9). The bar closes (the
+  // selection's job is done).
   const handleAnnotate = useCallback(
     (kind: AnnotationKind, color: AnnotationColor | null) => {
       const zone = materialZoneRef.current;
@@ -550,10 +577,24 @@ export default function ReaderPage() {
         captured.kind === "pdf"
           ? { page: range.page, start: range.start, end: range.end, quote: range.quote }
           : { sectionId: range.sectionId, start: range.start, end: range.end, quote: range.quote };
+      const tempId = newOptimisticAnnotationId();
       void addAnnotationMutation({
         variables: {
           input: { materialId: current.id, locator: locatorInput, range: rangeInput, kind, color: color ?? undefined, body: "" },
         },
+        optimisticResponse: buildAddAnnotationOptimistic(
+          {
+            materialId: current.id,
+            locator: { kind: locatorInput.kind, page: locatorInput.page ?? null, sectionId: locatorInput.sectionId ?? null },
+            range: rangeInput,
+            kind,
+            color,
+            body: "",
+          },
+          tempId,
+          new Date().toISOString(),
+        ),
+        update: addAnnotationListUpdate(current.id, tempId),
         onError: () => toast.error(t("reader.annotationAddFailed")),
       });
     },
@@ -562,8 +603,18 @@ export default function ReaderPage() {
 
   const handleRemoveAnnotation = useCallback(
     (id: string) => {
+      const materialId = materialRef.current?.id;
       void removeAnnotationMutation({
         variables: { id },
+        // The optimistic evict (owner bug round 2026-11-15): the mark is gone
+        // on the click; the sweep confirms. Without the materialId there is no
+        // list to update — fire bare (the read-back carries the removal).
+        ...(materialId
+          ? {
+              optimisticResponse: buildRemoveAnnotationOptimistic(id),
+              update: removeAnnotationListUpdate(materialId, id),
+            }
+          : {}),
         onError: () => toast.error(t("reader.annotationRemoveFailed")),
       });
     },
