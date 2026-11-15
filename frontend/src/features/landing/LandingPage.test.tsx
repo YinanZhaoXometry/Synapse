@@ -145,4 +145,37 @@ describe("LandingPage — the marketing root", () => {
     await user.click(screen.getByRole("link", { name: zh["landing.header.login"] }));
     expect(screen.getByText("login-sentinel")).toBeVisible();
   });
+
+  it("the header's language toggle swaps the whole page to English and persists", async () => {
+    const user = userEvent.setup();
+    renderLanding();
+    await screen.findByText(zh["landing.hero.lead"]);
+    // zh mode shows the language you'd switch to…
+    const toggle = screen.getByRole("button", { name: zh["common.switchLang"] });
+    expect(toggle).toHaveTextContent("EN");
+    await user.click(toggle);
+    // …and the page re-renders in English (hero copy + toggle label flip;
+    // the aria-label rides the active locale too).
+    expect(await screen.findByText(translations.en["landing.hero.lead"])).toBeVisible();
+    expect(screen.getByRole("button", { name: translations.en["common.switchLang"] })).toHaveTextContent("中文");
+    // The app's own language seam carries the choice (shared with the app).
+    expect(localStorage.getItem("synapse-lang")).toBe("en");
+  });
+
+  it("the brand mark is the app's own logo (round-3 unification)", async () => {
+    renderLanding();
+    await screen.findByText(zh["landing.hero.lead"]);
+    const marks = document.querySelectorAll<HTMLImageElement>(".lp-brand-mark");
+    expect(marks.length).toBeGreaterThanOrEqual(2); // header + footer
+    marks.forEach((mark) => expect(mark.getAttribute("src")).toBe("/logo.png"));
+  });
+
+  it("the hero map has no dots covering node titles (round-3 fix)", async () => {
+    renderLanding();
+    await screen.findByText(zh["landing.hero.lead"]);
+    // The four r=4 accent dots used to land exactly on the card titles.
+    const map = document.querySelector(".lp-knowledge-map svg")!;
+    const dots = Array.from(map.querySelectorAll("circle")).filter((c) => c.getAttribute("r") === "4");
+    expect(dots).toHaveLength(0);
+  });
 });

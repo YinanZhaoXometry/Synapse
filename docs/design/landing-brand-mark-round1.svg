@@ -1,0 +1,18 @@
+<!--
+  Synapse landing brand mark — round 1 (warm-light landing, PR #37 / dark round PR #41).
+  Backed up 2026-11-15 when the landing switched to the app's /logo.png for
+  brand unification (epic-37 round 3). Owner kept this as a reference for
+  future brand/mark design explorations: a coral rounded square carrying a
+  small "connection" glyph — two source nodes joining at a hub that drops a
+  leaf node (knowledge connecting and growing).
+  Palette as shipped: --lp-peach #ff6363 (round-2 dark revision; #ff7e5f in
+  round 1), --lp-on-warm #170d0f, --lp-surface #111214.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" role="img" aria-label="Synapse 标志（第一版官网品牌图形）">
+  <rect x="1" y="1" width="38" height="38" rx="12" fill="#ff6363"></rect>
+  <path d="M12 14.5 20 20l8-5.5M20 20v8" fill="none" stroke="#170d0f" stroke-width="1.8" stroke-linecap="round"></path>
+  <circle cx="12" cy="14.5" r="3" fill="#111214" stroke="#170d0f" stroke-width="1.5"></circle>
+  <circle cx="28" cy="14.5" r="3" fill="#111214" stroke="#170d0f" stroke-width="1.5"></circle>
+  <circle cx="20" cy="20" r="3.2" fill="#170d0f"></circle>
+  <circle cx="20" cy="28" r="2.5" fill="#111214" stroke="#170d0f" stroke-width="1.5"></circle>
+</svg>
