@@ -16,7 +16,9 @@ export function LandingFooter() {
         </div>
         <nav className="lp-footer-nav" aria-label={t("landing.footer.navAria")}>
           {/* product anchors first, then a separator, then the actions — the
-              download CTA repeats here so the page's goal survives to the end */}
+              download CTA repeats here so the page's goal survives to the end;
+              回到顶部 sits last, the nav's rightmost slot (owner round
+              2026-11-16) */}
           <a href="#lp-features">{t("landing.nav.features")}</a>
           <a href="#lp-preview">{t("landing.nav.preview")}</a>
           <a href="#lp-scenarios">{t("landing.nav.scenarios")}</a>
@@ -25,8 +27,8 @@ export function LandingFooter() {
           <a href={LANDING_RELEASES_URL} target="_blank" rel="noreferrer">
             {t("landing.hero.download")}
           </a>
-          <a href="#lp-top">{t("landing.footer.top")}</a>
           <a href={LANDING_REPO_URL} target="_blank" rel="noreferrer">GitHub</a>
+          <a href="#lp-top">{t("landing.footer.top")}</a>
         </nav>
       </div>
       <div className="lp-container lp-footer-bottom">

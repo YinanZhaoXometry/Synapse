@@ -27,6 +27,10 @@ vi.mock("@/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/api")>();
   return {
     ...actual,
+    // UserBubble rides the session identity now (owner round 2026-11-16) —
+    // stub the me read offline (data undefined → the placeholder letter; the
+    // identity walk itself is UserMenuButton.test's concern).
+    useMeQuery: () => ({ data: undefined, loading: false, error: null, refetch: vi.fn() }),
     // the persistence walk is out of scope here — the thread hydrates empty
     // and appends no-op
     useChatThreadQuery: () => ({ data: undefined, loading: false, error: null, refetch: vi.fn() }),
