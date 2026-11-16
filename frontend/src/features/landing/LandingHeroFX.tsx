@@ -5,13 +5,14 @@ import { useEffect, useRef } from "react";
  * and is masked to its center — the top/bottom fade out because the effect
  * belongs to the first screen only, not the board below.
  *
- * Variants (owner review round): pick with ?fx=… on the URL —
- *   beams   the round-8 diagonal light-beam field (canvas)
- *   dots    圆点点阵 — SVG dot pattern, breathing + slow drift + mouse parallax
- *   cross   十字网格 — plus-mark pattern, slow pan
- *   grid    方格线 — hairline grid, scale-breathing
- *   dotgrid dots + hairline grid combined
- * Default stays `beams` until the owner picks one; the query wins.
+ * Variants (pick with ?fx=… on the URL):
+ *   beams   diagonal light blobs (canvas) — rounded, wide (owner round 10)
+ *   dots    圆点点阵 — SVG dot pattern, breathing + drift + mouse parallax
+ *   cross   十字网格 — plus-mark pattern
+ *   grid    方格线 (canvas) — breathing grid + CLICK CURRENT: clicking fires a
+ *           coral charge that races along the grid lines outward, then fades
+ *   dotgrid grid + dots at the crossings, same click current
+ * Default stays `beams` until the owner locks a pick.
  */
 
 type FxVariant = "beams" | "dots" | "cross" | "grid" | "dotgrid";
@@ -42,24 +43,47 @@ const TONES = [
   [255, 217, 196],
 ];
 
+type Spark = { pts: Array<{ x: number; y: number }>; total: number };
+type Pulse = { x: number; y: number; t0: number; sparks: Spark[] };
+
+/** walk axis-aligned segments away from the click — the current's path */
+function makeSpark(x: number, y: number, w: number, h: number): Spark {
+  const pts = [{ x, y }];
+  let px = x;
+  let py = y;
+  let horizontal = Math.random() < 0.5;
+  let total = 0;
+  for (let i = 0; i < 7; i++) {
+    const step = 46 + Math.random() * 110;
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    px = Math.max(-30, Math.min(w + 30, px + (horizontal ? step * dir : 0)));
+    py = Math.max(-30, Math.min(h + 30, py + (horizontal ? 0 : step * dir)));
+    total += step;
+    pts.push({ x: px, y: py });
+    horizontal = !horizontal;
+  }
+  return { pts, total };
+}
+
 export function LandingHeroFX() {
   const variant = variantFromQuery();
+  const hostRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const groupRef = useRef<SVGGElement | null>(null);
-  const hostRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-
-    // beams internals
     const canvas = canvasRef.current;
-    let ctx = canvas?.getContext("2d") || null;
+    const ctx = canvas?.getContext("2d") || null;
+    const clickable = variant === "grid" || variant === "dotgrid";
+
+    // beams' low-res field + static grain
     let field: HTMLCanvasElement | null = null;
     let fx: CanvasRenderingContext2D | null = null;
     let grain: HTMLCanvasElement | null = null;
-    if (canvas && ctx) {
+    if (variant === "beams" && ctx) {
       field = document.createElement("canvas");
       field.width = 240;
       field.height = 160;
@@ -85,7 +109,6 @@ export function LandingHeroFX() {
       matchMedia("(prefers-reduced-motion: reduce)").matches ||
       document.documentElement.classList.contains("lp-reduce-motion");
 
-    // mouse parallax target, lerped per frame (normalized -1..1 from center)
     const target = { x: 0, y: 0 };
     const cur = { x: 0, y: 0 };
     const onMove = (e: MouseEvent) => {
@@ -93,29 +116,53 @@ export function LandingHeroFX() {
       target.x = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (r.width / 2)));
       target.y = Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height / 2)) / (r.height / 2)));
     };
+
+    const pulses: Pulse[] = [];
+    const onDown = (e: MouseEvent) => {
+      if (!canvas || staticFrame) return;
+      const r = canvas.getBoundingClientRect();
+      const x = e.clientX - r.left;
+      const y = e.clientY - r.top;
+      const sparks = Array.from({ length: 5 }, () => makeSpark(x, y, r.width, r.height));
+      pulses.push({ x, y, t0: last, sparks });
+      if (pulses.length > 4) pulses.shift();
+    };
+    if (!staticFrame && clickable) host.parentElement?.addEventListener("mousedown", onDown);
     if (!staticFrame) window.addEventListener("mousemove", onMove);
+
+    let dpr = 1;
 
     const drawBeams = (t: number) => {
       if (!fx || !field || !canvas || !ctx || !grain) return;
+      const W = 240;
+      const H = 160;
       fx.setTransform(1, 0, 0, 1, 0, 0);
-      fx.clearRect(0, 0, 240, 160);
+      fx.clearRect(0, 0, W, H);
       fx.globalCompositeOperation = "lighter";
-      fx.translate(120, 80);
+      fx.translate(W / 2, H / 2);
       fx.rotate(-Math.PI / 6);
-      const span = Math.hypot(240, 160) * 1.2;
+      const span = Math.hypot(W, H) * 1.2;
       const beamGap = span / 6.5;
       for (let i = 0; i < TONES.length; i++) {
         const [r, g, b] = TONES[i];
-        const wobble = drift(t, i + 1);
-        const cx = -span / 2 + beamGap * (i + 0.5) + wobble * beamGap * 0.42;
-        const halfW = beamGap * (0.34 + 0.2 * Math.sin(t * 0.55 + i * 2.4) ** 2);
-        const grad = fx.createLinearGradient(cx - halfW, 0, cx + halfW, 0);
-        const a = 0.42 + 0.14 * Math.sin(t * 0.5 + i * 1.9);
-        grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
-        grad.addColorStop(0.5, `rgba(${r},${g},${b},${Math.max(0.1, a)})`);
+        const cx = -span / 2 + beamGap * (i + 0.5) + drift(t, i + 1) * beamGap * 0.42;
+        const cy = drift(t, i + 2.4) * 22;
+        // round 10: rounded wide blobs instead of full-span stripes — a
+        // squashed radial gradient reads as a soft oval beam
+        const R = span * (0.17 + 0.045 * Math.sin(t * 0.4 + i * 1.3));
+        fx.save();
+        fx.translate(cx, cy);
+        fx.scale(1, 0.62);
+        const grad = fx.createRadialGradient(0, 0, 0, 0, 0, R);
+        const a = 0.5 + 0.14 * Math.sin(t * 0.5 + i * 1.9);
+        grad.addColorStop(0, `rgba(${r},${g},${b},${Math.max(0.14, a)})`);
+        grad.addColorStop(0.55, `rgba(${r},${g},${b},${a * 0.5})`);
         grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
         fx.fillStyle = grad;
-        fx.fillRect(-span / 2, -span / 2, span, span);
+        fx.beginPath();
+        fx.arc(0, 0, R, 0, Math.PI * 2);
+        fx.fill();
+        fx.restore();
       }
       fx.globalCompositeOperation = "overlay";
       fx.globalAlpha = 0.05;
@@ -123,47 +170,210 @@ export function LandingHeroFX() {
       fx.fillRect(-span / 2, -span / 2, span, span);
       fx.globalAlpha = 1;
 
-      const w = canvas.width;
-      const h = canvas.height;
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const w = canvas.width / dpr;
+      const h = canvas.height / dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
       ctx.globalAlpha = 0.66;
-      // parallax: nudge the field toward the cursor, drawn oversized so no gap
       ctx.drawImage(field, cur.x * 26 - 22, cur.y * 18 - 16, w + 44, h + 32);
       ctx.globalAlpha = 1;
       ctx.fillStyle = "rgba(7, 8, 10, 0.18)";
       ctx.fillRect(0, 0, w, h);
     };
 
-    const drawPattern = (t: number) => {
-      const svg = svgRef.current;
-      const group = groupRef.current;
-      if (!svg || !group) return;
-      const w = svg.clientWidth || 1;
-      const h = svg.clientHeight || 1;
+    const drawPulse = (p: Pulse, w: number, h: number, now: number, spacing: number) => {
+      const age = now - p.t0;
+      const LIFE = 2.4;
+      if (age < 0 || age > LIFE) return;
+      const intensity = Math.pow(1 - age / LIFE, 1.15);
+      const front = (1 - Math.pow(1 - Math.min(1, age / 0.9), 3)) * 520; // easeOut
+      ctx.save();
+      // the wavefront ring, barely there — the grid segments carry the effect
+      ctx.globalAlpha = 0.1 * intensity;
+      ctx.strokeStyle = "rgba(255, 99, 99, 1)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, front, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // grid segments crossing the wavefront light up, brightest at the front
+      ctx.globalAlpha = 1;
+      for (let gx = ((p.x % spacing) + spacing) % spacing; gx < w; gx += spacing) {
+        const dx = Math.abs(gx - p.x);
+        if (dx < front) {
+          const off = Math.sqrt(front * front - dx * dx);
+          for (const s of [-1, 1]) {
+            const yy = p.y + s * off;
+            if (yy < -20 || yy > h + 20) continue;
+            const prox = 1 - dx / front;
+            const len = (16 + 30 * prox) / 2;
+            ctx.strokeStyle = `rgba(255, 120, 110, ${0.85 * intensity})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(gx, yy - len);
+            ctx.lineTo(gx, yy + len);
+            ctx.stroke();
+            ctx.strokeStyle = `rgba(255, 236, 228, ${0.8 * intensity})`;
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(gx, yy - len * 0.7);
+            ctx.lineTo(gx, yy + len * 0.7);
+            ctx.stroke();
+          }
+        }
+      }
+      for (let gy = ((p.y % spacing) + spacing) % spacing; gy < h; gy += spacing) {
+        const dy = Math.abs(gy - p.y);
+        if (dy < front) {
+          const off = Math.sqrt(front * front - dy * dy);
+          for (const s of [-1, 1]) {
+            const xx = p.x + s * off;
+            if (xx < -20 || xx > w + 20) continue;
+            const prox = 1 - dy / front;
+            const len = (16 + 30 * prox) / 2;
+            ctx.strokeStyle = `rgba(255, 120, 110, ${0.85 * intensity})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(xx - len, gy);
+            ctx.lineTo(xx + len, gy);
+            ctx.stroke();
+            ctx.strokeStyle = `rgba(255, 236, 228, ${0.8 * intensity})`;
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(xx - len * 0.7, gy);
+            ctx.lineTo(xx + len * 0.7, gy);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // the current itself: sparks racing along the walked paths, trailing off
+      for (const spark of p.sparks) {
+        const head = age * 300;
+        if (head <= 0) continue;
+        let acc = 0;
+        for (let i = 1; i < spark.pts.length && acc <= head; i++) {
+          const a = spark.pts[i - 1];
+          const b = spark.pts[i];
+          const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+          const segEnd = Math.min(acc + segLen, head);
+          if (segEnd <= acc) break;
+          const trailStart = Math.max(acc, head - 84);
+          // trail in 3 slices, fading backwards
+          for (let slice = 0; slice < 3; slice++) {
+            const s0 = trailStart + ((segEnd - trailStart) * slice) / 3;
+            const s1 = trailStart + ((segEnd - trailStart) * (slice + 1)) / 3;
+            if (s1 <= s0) continue;
+            const pa = pointAt(spark.pts, s0);
+            const pb = pointAt(spark.pts, s1);
+            ctx.strokeStyle = `rgba(255, 99, 99, ${(0.16 + 0.22 * slice) * intensity})`;
+            ctx.lineWidth = 2.4;
+            ctx.beginPath();
+            ctx.moveTo(pa.x, pa.y);
+            ctx.lineTo(pb.x, pb.y);
+            ctx.stroke();
+          }
+          if (segEnd >= acc && segEnd - acc > 0) {
+            const pb = pointAt(spark.pts, segEnd);
+            ctx.strokeStyle = `rgba(255, 236, 228, ${0.9 * intensity})`;
+            ctx.lineWidth = 1.1;
+            ctx.beginPath();
+            ctx.moveTo(pointAt(spark.pts, Math.max(acc, segEnd - 26)).x, pointAt(spark.pts, Math.max(acc, segEnd - 26)).y);
+            ctx.lineTo(pb.x, pb.y);
+            ctx.stroke();
+            ctx.fillStyle = `rgba(255, 244, 240, ${intensity})`;
+            ctx.beginPath();
+            ctx.arc(pb.x, pb.y, 2.2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          acc += segLen;
+        }
+      }
+      ctx.restore();
+    };
+
+    const drawGrid = (t: number) => {
+      if (!canvas || !ctx) return;
+      const w = canvas.width / dpr;
+      const h = canvas.height / dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+
+      const spacing = variant === "dotgrid" ? 44 : 48;
       const breathe = 1 + 0.045 * Math.sin(t * 0.35);
-      const px = cur.x * 16 + drift(t, 3) * 7;
-      const py = cur.y * 12 + drift(t, 6) * 6;
-      const cx = w / 2;
-      const cy = h / 2;
-      group.setAttribute(
-        "transform",
-        `translate(${(cx + px).toFixed(2)} ${(cy + py).toFixed(2)}) scale(${breathe.toFixed(4)}) translate(${(-cx).toFixed(2)} ${(-cy).toFixed(2)})`,
-      );
-      svg.style.opacity = String(0.62 + 0.26 * Math.sin(t * 0.35 + 1.2));
+      ctx.save();
+      ctx.translate(w / 2 + cur.x * 16 + drift(t, 3) * 7, h / 2 + cur.y * 12 + drift(t, 6) * 6);
+      ctx.scale(breathe, breathe);
+      ctx.translate(-w / 2, -h / 2);
+      const m = 64;
+      ctx.strokeStyle = variant === "dotgrid" ? "rgba(255, 99, 99, 0.24)" : "rgba(255, 99, 99, 0.4)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = ((0 % spacing) + spacing) % spacing; x < w + m; x += spacing) {
+        ctx.moveTo(x, -m);
+        ctx.lineTo(x, h + m);
+      }
+      for (let y = 0; y < h + m; y += spacing) {
+        ctx.moveTo(-m, y);
+        ctx.lineTo(w + m, y);
+      }
+      ctx.stroke();
+      if (variant === "dotgrid") {
+        ctx.fillStyle = "rgba(255, 138, 120, 0.6)";
+        for (let x = spacing / 2; x < w + m; x += spacing) {
+          for (let y = spacing / 2; y < h + m; y += spacing) {
+            ctx.beginPath();
+            ctx.arc(x, y, 1.8, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+      ctx.restore();
+
+      for (const p of pulses) drawPulse(p, w, h, t, spacing);
+      while (pulses.length && t - pulses[0].t0 > 2.5) pulses.shift();
+    };
+
+    const pointAt = (pts: Array<{ x: number; y: number }>, dist: number) => {
+      let acc = 0;
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1];
+        const b = pts[i];
+        const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+        if (acc + segLen >= dist) {
+          const k = (dist - acc) / segLen;
+          return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+        }
+        acc += segLen;
+      }
+      return pts[pts.length - 1];
+    };
+
+    const renderOne = () => {
+      if (variant === "beams") drawBeams(7);
+      else drawGrid(7);
+    };
+
+    const resize = () => {
+      if (canvas) {
+        dpr = Math.min(devicePixelRatio || 1, 2);
+        const r = canvas.getBoundingClientRect();
+        canvas.width = Math.max(1, Math.round(r.width * dpr));
+        canvas.height = Math.max(1, Math.round(r.height * dpr));
+      }
+      renderOne();
     };
 
     let raf = 0;
     let running = false;
     let last = 0;
-
     const frame = (now: number) => {
       const t = last + Math.min((now - last) / 1000, 0.1) * 0.4; // 0.4× clock
       last = t;
       cur.x += (target.x - cur.x) * 0.03;
       cur.y += (target.y - cur.y) * 0.03;
       if (variant === "beams") drawBeams(t);
-      else drawPattern(t);
+      else drawGrid(t);
       raf = requestAnimationFrame(frame);
     };
     const start = () => {
@@ -175,21 +385,6 @@ export function LandingHeroFX() {
     const stop = () => {
       running = false;
       cancelAnimationFrame(raf);
-    };
-
-    const resize = () => {
-      if (canvas) {
-        const dpr = Math.min(devicePixelRatio || 1, 2);
-        const r = canvas.getBoundingClientRect();
-        canvas.width = Math.max(1, Math.round(r.width * dpr));
-        canvas.height = Math.max(1, Math.round(r.height * dpr));
-      }
-      renderOne();
-    };
-    const renderOne = () => {
-      const t = 7;
-      if (variant === "beams") drawBeams(t);
-      else drawPattern(t);
     };
 
     resize();
@@ -205,11 +400,20 @@ export function LandingHeroFX() {
     return () => {
       stop();
       window.removeEventListener("resize", resize);
-      if (!staticFrame) window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mousemove", onMove);
+      host.parentElement?.removeEventListener("mousedown", onDown);
     };
   }, [variant]);
 
   if (variant === "beams") {
+    return (
+      <div className="lp-hero-fx" ref={hostRef} aria-hidden="true">
+        <canvas ref={canvasRef} className="lp-hero-fx-canvas" />
+      </div>
+    );
+  }
+
+  if (variant === "grid" || variant === "dotgrid") {
     return (
       <div className="lp-hero-fx" ref={hostRef} aria-hidden="true">
         <canvas ref={canvasRef} className="lp-hero-fx-canvas" />
@@ -226,13 +430,6 @@ export function LandingHeroFX() {
           </pattern>
           <pattern id="lp-fx-cross" width="44" height="44" patternUnits="userSpaceOnUse">
             <path d="M22 15v14M15 22h14" stroke="rgba(255, 99, 99, 0.5)" strokeWidth="1" />
-          </pattern>
-          <pattern id="lp-fx-grid" width="48" height="48" patternUnits="userSpaceOnUse">
-            <path d="M0 .5H48M.5 0V48" stroke="rgba(255, 99, 99, 0.4)" strokeWidth="1" />
-          </pattern>
-          <pattern id="lp-fx-dotgrid" width="44" height="44" patternUnits="userSpaceOnUse">
-            <path d="M0 .5H44M.5 0V44" stroke="rgba(255, 99, 99, 0.22)" strokeWidth="1" />
-            <circle cx="22" cy="22" r="1.8" fill="rgba(255, 138, 120, 0.6)" />
           </pattern>
         </defs>
         <g ref={groupRef}>
