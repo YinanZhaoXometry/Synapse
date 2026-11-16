@@ -271,7 +271,7 @@ describe("LandingPage — round 7 polish", () => {
   });
 });
 
-describe("LandingPage — round 8+10 (glass navbar + hero fx)", () => {
+describe("LandingPage — round 8+10 (glass navbar + beams fx)", () => {
   it("mounts the hero fx inside the copy block, masked and aria-hidden", async () => {
     renderLanding();
     await screen.findByText(zh["landing.hero.lead"]);

@@ -614,9 +614,9 @@ html.lp-active {
   gap: 56px;
   padding-block: 116px 72px;
 }
-/* the hero fx lives inside the copy block and is masked to its center —
- * top/bottom fade out because the effect belongs to the first screen only
- * (round 10); variants switch via ?fx= on the URL for the owner review */
+/* the hero fx lives inside the copy block and is masked to a soft rectangular
+ * middle band — all four edges fade, no silhouette (owner round 10: the old
+ * radial mask drew a visible circle); full-bleed across the viewport width */
 .lp-hero-fx {
   position: absolute;
   /* full-bleed breakout (owner round 10): the copy block caps at 860px, but
