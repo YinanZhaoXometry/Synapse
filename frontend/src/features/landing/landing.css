@@ -620,6 +620,10 @@ html.lp-active {
 .lp-hero-fx {
   position: absolute;
   inset: 0;
+  /* z-index -1: a positioned element otherwise paints ABOVE the in-flow
+   * text (CSS paint order), washing the headline and buttons in glow —
+   * push it behind the copy's content instead (round 10, owner report) */
+  z-index: -1;
   pointer-events: none;
   -webkit-mask-image: radial-gradient(ellipse 62% 56% at 50% 50%, #000 34%, transparent 76%);
   mask-image: radial-gradient(ellipse 62% 56% at 50% 50%, #000 34%, transparent 76%);
@@ -668,7 +672,9 @@ html.lp-active {
   margin-top: var(--lp-space-6);
   max-width: 42rem;
   margin-inline: auto;
-  color: var(--lp-fg-2);
+  /* full fg on the glow backdrop — fg-2 gray washed out against the beams
+   * (owner round 10); hierarchy rides on size/leading instead */
+  color: var(--lp-fg);
   font-size: var(--lp-text-lg);
   line-height: 1.8;
   text-wrap: balance;
@@ -691,7 +697,8 @@ html.lp-active {
   display: flex;
   align-items: center;
   gap: var(--lp-space-2);
-  color: var(--lp-fg-2);
+  /* lifted from fg-2 with the glow backdrop (owner round 10) */
+  color: var(--lp-fg);
   font-size: var(--lp-text-sm);
 }
 .lp-hero-principle::before {
