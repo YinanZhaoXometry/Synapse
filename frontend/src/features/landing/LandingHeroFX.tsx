@@ -88,6 +88,30 @@ export function LandingHeroFX() {
       target.x = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (r.width / 2)));
       target.y = Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height / 2)) / (r.height / 2)));
     };
+    // the cursor highlight drifts home when the pointer leaves the window
+    const onLeave = (e: MouseEvent) => {
+      if (!e.relatedTarget) {
+        target.x = 0;
+        target.y = 0;
+      }
+    };
+
+    /** owner round 10: a warm highlight that follows the cursor — the theme
+     *  glow is pulled toward wherever the pointer is (lerped, additive) */
+    const drawMouseGlow = (w: number, h: number) => {
+      const x = w / 2 + cur.x * (w / 2);
+      const y = h / 2 + cur.y * (h / 2);
+      const R = Math.min(w, h) * 0.3;
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      const g = ctx.createRadialGradient(x, y, 0, x, y, R);
+      g.addColorStop(0, "rgba(255, 150, 90, 0.3)");
+      g.addColorStop(0.5, "rgba(255, 110, 64, 0.13)");
+      g.addColorStop(1, "rgba(255, 110, 64, 0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(x - R, y - R, R * 2, R * 2);
+      ctx.restore();
+    };
 
     const pulses: Pulse[] = [];
     const onDown = (e: MouseEvent) => {
@@ -97,7 +121,10 @@ export function LandingHeroFX() {
       if (pulses.length > 4) pulses.shift();
     };
     if (!staticFrame && clickable) host.parentElement?.addEventListener("mousedown", onDown);
-    if (!staticFrame) window.addEventListener("mousemove", onMove);
+    if (!staticFrame) {
+      window.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseout", onLeave);
+    }
 
     let dpr = 1;
 
@@ -149,6 +176,8 @@ export function LandingHeroFX() {
       ctx.globalCompositeOperation = "source-over";
       ctx.fillStyle = "rgba(7, 8, 10, 0.18)";
       ctx.fillRect(0, 0, w, h);
+
+      drawMouseGlow(w, h);
     };
 
     /** the click current (owner round 10): a charge that runs ALONG the grid
@@ -260,6 +289,7 @@ export function LandingHeroFX() {
       }
       ctx.restore();
 
+      drawMouseGlow(w, h);
       for (const p of pulses) drawPulse(p, w, h, t, spacing);
       while (pulses.length && t - pulses[0].t0 > 2.5) pulses.shift();
     };
@@ -316,6 +346,7 @@ export function LandingHeroFX() {
       stop();
       window.removeEventListener("resize", resize);
       window.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseout", onLeave);
       host.parentElement?.removeEventListener("mousedown", onDown);
     };
   }, [variant]);
