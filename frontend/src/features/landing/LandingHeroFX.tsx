@@ -60,30 +60,21 @@ export function LandingHeroFX() {
     const ctx = canvas?.getContext("2d") || null;
     const clickable = variant === "grid" || variant === "dotgrid";
 
-    // beams' low-res field + static grain
-    let field: HTMLCanvasElement | null = null;
-    let fx: CanvasRenderingContext2D | null = null;
-    let grain: HTMLCanvasElement | null = null;
-    if (variant === "beams" && ctx) {
-      field = document.createElement("canvas");
-      field.width = 240;
-      field.height = 160;
-      fx = field.getContext("2d");
-      grain = document.createElement("canvas");
-      grain.width = 96;
-      grain.height = 96;
-      const gx = grain.getContext("2d");
-      if (gx) {
-        const gimg = gx.createImageData(96, 96);
-        for (let i = 0; i < gimg.data.length; i += 4) {
-          const v = 200 + Math.random() * 55;
-          gimg.data[i] = v;
-          gimg.data[i + 1] = v;
-          gimg.data[i + 2] = v;
-          gimg.data[i + 3] = 255;
-        }
-        gx.putImageData(gimg, 0, 0);
+    // static grain tile (shared by beams' texture)
+    const grain = document.createElement("canvas");
+    grain.width = 96;
+    grain.height = 96;
+    const gx = grain.getContext("2d");
+    if (gx) {
+      const gimg = gx.createImageData(96, 96);
+      for (let i = 0; i < gimg.data.length; i += 4) {
+        const v = 200 + Math.random() * 55;
+        gimg.data[i] = v;
+        gimg.data[i + 1] = v;
+        gimg.data[i + 2] = v;
+        gimg.data[i + 3] = 255;
       }
+      gx.putImageData(gimg, 0, 0);
     }
 
     const staticFrame =
@@ -111,50 +102,51 @@ export function LandingHeroFX() {
     let dpr = 1;
 
     const drawBeams = (t: number) => {
-      if (!fx || !field || !canvas || !ctx || !grain) return;
-      const W = 240;
-      const H = 160;
-      fx.setTransform(1, 0, 0, 1, 0, 0);
-      fx.clearRect(0, 0, W, H);
-      fx.globalCompositeOperation = "lighter";
-      fx.translate(W / 2, H / 2);
-      fx.rotate(-Math.PI / 6);
-      const span = Math.hypot(W, H) * 1.2;
-      const beamGap = span / 6.5;
-      for (let i = 0; i < TONES.length; i++) {
-        const [r, g, b] = TONES[i];
-        const cx = -span / 2 + beamGap * (i + 0.5) + drift(t, i + 1) * beamGap * 0.42;
-        const cy = drift(t, i + 2.4) * 22;
-        // round 10: near-round wide blobs (owner: "more round, wider") — a
-        // barely squashed radial gradient reads as a soft circular glow
-        const R = span * (0.22 + 0.05 * Math.sin(t * 0.4 + i * 1.3));
-        fx.save();
-        fx.translate(cx, cy);
-        fx.scale(1, 0.85);
-        const grad = fx.createRadialGradient(0, 0, 0, 0, 0, R);
-        const a = 0.5 + 0.14 * Math.sin(t * 0.5 + i * 1.9);
-        grad.addColorStop(0, `rgba(${r},${g},${b},${Math.max(0.14, a)})`);
-        grad.addColorStop(0.55, `rgba(${r},${g},${b},${a * 0.5})`);
-        grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
-        fx.fillStyle = grad;
-        fx.beginPath();
-        fx.arc(0, 0, R, 0, Math.PI * 2);
-        fx.fill();
-        fx.restore();
-      }
-      fx.globalCompositeOperation = "overlay";
-      fx.globalAlpha = 0.05;
-      fx.fillStyle = fx.createPattern(grain, "repeat");
-      fx.fillRect(-span / 2, -span / 2, span, span);
-      fx.globalAlpha = 1;
-
+      if (!canvas || !ctx || !grain) return;
+      // draw directly in CSS px on the main canvas — the transform is
+      // isotropic (dpr on both axes), so circles stay CIRCLES no matter how
+      // tall the canvas grows. (The old low-res field was stretched to fill,
+      // which sheared the blobs into ellipses on tall pages — owner report.)
       const w = canvas.width / dpr;
       const h = canvas.height / dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
-      ctx.globalAlpha = 0.66;
-      ctx.drawImage(field, cur.x * 26 - 22, cur.y * 18 - 16, w + 44, h + 32);
+      ctx.save();
+      ctx.translate(w / 2 + cur.x * 18, h / 2 + cur.y * 12);
+      ctx.rotate(-Math.PI / 6);
+      const span = Math.hypot(w, h) * 1.25;
+      const beamGap = span / 5.2;
+      ctx.globalCompositeOperation = "lighter";
+      for (let i = 0; i < TONES.length; i++) {
+        const [r, g, b] = TONES[i];
+        const cx = -span / 2 + beamGap * (i + 0.5) + drift(t, i + 1) * beamGap * 0.4;
+        const cy = drift(t, i + 2.4) * 26;
+        // near-round wide blobs, sized by the SHORT canvas side so they read
+        // equally round on wide and tall viewports
+        const R = Math.min(w, h) * (0.32 + 0.055 * Math.sin(t * 0.4 + i * 1.3));
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(1, 0.85);
+        const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
+        const a = 0.5 + 0.14 * Math.sin(t * 0.5 + i * 1.9);
+        grad.addColorStop(0, `rgba(${r},${g},${b},${Math.max(0.14, a)})`);
+        grad.addColorStop(0.55, `rgba(${r},${g},${b},${a * 0.5})`);
+        grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(0, 0, R, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
+
+      // grain tile over the whole canvas (overlay keeps the blobs' color)
+      ctx.globalCompositeOperation = "overlay";
+      ctx.globalAlpha = 0.045;
+      ctx.fillStyle = ctx.createPattern(grain, "repeat");
+      ctx.fillRect(0, 0, w, h);
       ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
       ctx.fillStyle = "rgba(7, 8, 10, 0.18)";
       ctx.fillRect(0, 0, w, h);
     };
