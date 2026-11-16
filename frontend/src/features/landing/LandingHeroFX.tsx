@@ -33,37 +33,18 @@ const drift = (t: number, seed: number) =>
   Math.sin(t * 0.9 + seed * 3.1) * 0.28 +
   Math.sin(t * 1.7 + seed * 5.3) * 0.12;
 
+// orange theme family (owner round 10): saturated coral-orange, no pale tints
 const TONES = [
   [255, 99, 99],
+  [255, 128, 88],
+  [255, 112, 72],
   [255, 138, 120],
-  [255, 176, 176],
-  [255, 192, 180],
   [255, 99, 99],
+  [255, 120, 76],
   [255, 138, 120],
-  [255, 217, 196],
 ];
 
-type Spark = { pts: Array<{ x: number; y: number }>; total: number };
-type Pulse = { x: number; y: number; t0: number; sparks: Spark[] };
-
-/** walk axis-aligned segments away from the click — the current's path */
-function makeSpark(x: number, y: number, w: number, h: number): Spark {
-  const pts = [{ x, y }];
-  let px = x;
-  let py = y;
-  let horizontal = Math.random() < 0.5;
-  let total = 0;
-  for (let i = 0; i < 7; i++) {
-    const step = 46 + Math.random() * 110;
-    const dir = Math.random() < 0.5 ? -1 : 1;
-    px = Math.max(-30, Math.min(w + 30, px + (horizontal ? step * dir : 0)));
-    py = Math.max(-30, Math.min(h + 30, py + (horizontal ? 0 : step * dir)));
-    total += step;
-    pts.push({ x: px, y: py });
-    horizontal = !horizontal;
-  }
-  return { pts, total };
-}
+type Pulse = { x: number; y: number; t0: number };
 
 export function LandingHeroFX() {
   const variant = variantFromQuery();
@@ -121,10 +102,7 @@ export function LandingHeroFX() {
     const onDown = (e: MouseEvent) => {
       if (!canvas || staticFrame) return;
       const r = canvas.getBoundingClientRect();
-      const x = e.clientX - r.left;
-      const y = e.clientY - r.top;
-      const sparks = Array.from({ length: 5 }, () => makeSpark(x, y, r.width, r.height));
-      pulses.push({ x, y, t0: last, sparks });
+      pulses.push({ x: e.clientX - r.left, y: e.clientY - r.top, t0: last });
       if (pulses.length > 4) pulses.shift();
     };
     if (!staticFrame && clickable) host.parentElement?.addEventListener("mousedown", onDown);
@@ -147,12 +125,12 @@ export function LandingHeroFX() {
         const [r, g, b] = TONES[i];
         const cx = -span / 2 + beamGap * (i + 0.5) + drift(t, i + 1) * beamGap * 0.42;
         const cy = drift(t, i + 2.4) * 22;
-        // round 10: rounded wide blobs instead of full-span stripes — a
-        // squashed radial gradient reads as a soft oval beam
-        const R = span * (0.17 + 0.045 * Math.sin(t * 0.4 + i * 1.3));
+        // round 10: near-round wide blobs (owner: "more round, wider") — a
+        // barely squashed radial gradient reads as a soft circular glow
+        const R = span * (0.22 + 0.05 * Math.sin(t * 0.4 + i * 1.3));
         fx.save();
         fx.translate(cx, cy);
-        fx.scale(1, 0.62);
+        fx.scale(1, 0.85);
         const grad = fx.createRadialGradient(0, 0, 0, 0, 0, R);
         const a = 0.5 + 0.14 * Math.sin(t * 0.5 + i * 1.9);
         grad.addColorStop(0, `rgba(${r},${g},${b},${Math.max(0.14, a)})`);
@@ -181,44 +159,62 @@ export function LandingHeroFX() {
       ctx.fillRect(0, 0, w, h);
     };
 
+    /** the click current (owner round 10): a charge that runs ALONG the grid
+     *  lines only — every line the expanding front crosses lights up in the
+     *  orange theme color, brightest right at the front, then it decays. No
+     *  extra geometry: no rings, no spark paths, nothing off the grid. */
     const drawPulse = (p: Pulse, w: number, h: number, now: number, spacing: number) => {
       const age = now - p.t0;
       const LIFE = 2.4;
       if (age < 0 || age > LIFE) return;
       const intensity = Math.pow(1 - age / LIFE, 1.15);
       const front = (1 - Math.pow(1 - Math.min(1, age / 0.9), 3)) * 520; // easeOut
-      ctx.save();
-      // the wavefront ring, barely there — the grid segments carry the effect
-      ctx.globalAlpha = 0.1 * intensity;
-      ctx.strokeStyle = "rgba(255, 99, 99, 1)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, front, 0, Math.PI * 2);
-      ctx.stroke();
 
-      // grid segments crossing the wavefront light up, brightest at the front
-      ctx.globalAlpha = 1;
+      // each grid line the front has crossed carries a glowing run centered
+      // where the front meets it; runs lengthen near the front, then fade
+      const run = (at: number, along: number, vertical: boolean) => {
+        const prox = 1 - along / front; // 1 at the front, 0 far behind
+        const half = (14 + 26 * prox) / 2;
+        // orange theme, two-layer: deep orange body + bright orange core
+        const body = `rgba(255, 110, 64, ${0.9 * intensity})`;
+        const core = `rgba(255, 168, 104, ${0.85 * intensity})`;
+        ctx.lineCap = "round";
+        if (vertical) {
+          ctx.strokeStyle = body;
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.moveTo(at, along - half);
+          ctx.lineTo(at, along + half);
+          ctx.stroke();
+          ctx.strokeStyle = core;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(at, along - half * 0.72);
+          ctx.lineTo(at, along + half * 0.72);
+          ctx.stroke();
+        } else {
+          ctx.strokeStyle = body;
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.moveTo(along - half, at);
+          ctx.lineTo(along + half, at);
+          ctx.stroke();
+          ctx.strokeStyle = core;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(along - half * 0.72, at);
+          ctx.lineTo(along + half * 0.72, at);
+          ctx.stroke();
+        }
+      };
+
       for (let gx = ((p.x % spacing) + spacing) % spacing; gx < w; gx += spacing) {
         const dx = Math.abs(gx - p.x);
         if (dx < front) {
           const off = Math.sqrt(front * front - dx * dx);
           for (const s of [-1, 1]) {
             const yy = p.y + s * off;
-            if (yy < -20 || yy > h + 20) continue;
-            const prox = 1 - dx / front;
-            const len = (16 + 30 * prox) / 2;
-            ctx.strokeStyle = `rgba(255, 120, 110, ${0.85 * intensity})`;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(gx, yy - len);
-            ctx.lineTo(gx, yy + len);
-            ctx.stroke();
-            ctx.strokeStyle = `rgba(255, 236, 228, ${0.8 * intensity})`;
-            ctx.lineWidth = 0.8;
-            ctx.beginPath();
-            ctx.moveTo(gx, yy - len * 0.7);
-            ctx.lineTo(gx, yy + len * 0.7);
-            ctx.stroke();
+            if (yy >= -20 && yy <= h + 20) run(gx, yy, true);
           }
         }
       }
@@ -228,68 +224,10 @@ export function LandingHeroFX() {
           const off = Math.sqrt(front * front - dy * dy);
           for (const s of [-1, 1]) {
             const xx = p.x + s * off;
-            if (xx < -20 || xx > w + 20) continue;
-            const prox = 1 - dy / front;
-            const len = (16 + 30 * prox) / 2;
-            ctx.strokeStyle = `rgba(255, 120, 110, ${0.85 * intensity})`;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(xx - len, gy);
-            ctx.lineTo(xx + len, gy);
-            ctx.stroke();
-            ctx.strokeStyle = `rgba(255, 236, 228, ${0.8 * intensity})`;
-            ctx.lineWidth = 0.8;
-            ctx.beginPath();
-            ctx.moveTo(xx - len * 0.7, gy);
-            ctx.lineTo(xx + len * 0.7, gy);
-            ctx.stroke();
+            if (xx >= -20 && xx <= w + 20) run(gy, xx, false);
           }
         }
       }
-
-      // the current itself: sparks racing along the walked paths, trailing off
-      for (const spark of p.sparks) {
-        const head = age * 300;
-        if (head <= 0) continue;
-        let acc = 0;
-        for (let i = 1; i < spark.pts.length && acc <= head; i++) {
-          const a = spark.pts[i - 1];
-          const b = spark.pts[i];
-          const segLen = Math.hypot(b.x - a.x, b.y - a.y);
-          const segEnd = Math.min(acc + segLen, head);
-          if (segEnd <= acc) break;
-          const trailStart = Math.max(acc, head - 84);
-          // trail in 3 slices, fading backwards
-          for (let slice = 0; slice < 3; slice++) {
-            const s0 = trailStart + ((segEnd - trailStart) * slice) / 3;
-            const s1 = trailStart + ((segEnd - trailStart) * (slice + 1)) / 3;
-            if (s1 <= s0) continue;
-            const pa = pointAt(spark.pts, s0);
-            const pb = pointAt(spark.pts, s1);
-            ctx.strokeStyle = `rgba(255, 99, 99, ${(0.16 + 0.22 * slice) * intensity})`;
-            ctx.lineWidth = 2.4;
-            ctx.beginPath();
-            ctx.moveTo(pa.x, pa.y);
-            ctx.lineTo(pb.x, pb.y);
-            ctx.stroke();
-          }
-          if (segEnd >= acc && segEnd - acc > 0) {
-            const pb = pointAt(spark.pts, segEnd);
-            ctx.strokeStyle = `rgba(255, 236, 228, ${0.9 * intensity})`;
-            ctx.lineWidth = 1.1;
-            ctx.beginPath();
-            ctx.moveTo(pointAt(spark.pts, Math.max(acc, segEnd - 26)).x, pointAt(spark.pts, Math.max(acc, segEnd - 26)).y);
-            ctx.lineTo(pb.x, pb.y);
-            ctx.stroke();
-            ctx.fillStyle = `rgba(255, 244, 240, ${intensity})`;
-            ctx.beginPath();
-            ctx.arc(pb.x, pb.y, 2.2, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          acc += segLen;
-        }
-      }
-      ctx.restore();
     };
 
     const drawGrid = (t: number) => {
@@ -332,21 +270,6 @@ export function LandingHeroFX() {
 
       for (const p of pulses) drawPulse(p, w, h, t, spacing);
       while (pulses.length && t - pulses[0].t0 > 2.5) pulses.shift();
-    };
-
-    const pointAt = (pts: Array<{ x: number; y: number }>, dist: number) => {
-      let acc = 0;
-      for (let i = 1; i < pts.length; i++) {
-        const a = pts[i - 1];
-        const b = pts[i];
-        const segLen = Math.hypot(b.x - a.x, b.y - a.y);
-        if (acc + segLen >= dist) {
-          const k = (dist - acc) / segLen;
-          return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
-        }
-        acc += segLen;
-      }
-      return pts[pts.length - 1];
     };
 
     const renderOne = () => {
