@@ -13,7 +13,7 @@
  */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Sparkles } from "lucide-react";
+import { ChevronDown, Sparkles } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { CompanionPanel } from "@/features/companion";
 import { usePlanMaterialsQuery, usePlanMistakeEntriesQuery, usePlansQuery } from "@/api";
@@ -65,21 +65,30 @@ export default function AITutorPage() {
         </div>
       ) : (
         <>
-          {/* the plan picker — which plan's materials the tutor grounds on */}
+          {/* the plan picker — which plan's materials the tutor grounds on.
+              The native select's own caret hugs the edge (owner round
+              2026-11-16), so the Settings-page pattern applies: appearance-none
+              + a real ChevronDown with breathing room (pr-9 / right-3). */}
           <label className="flex items-center gap-2 pt-4 pb-3 shrink-0 text-xs text-muted-foreground">
             {t("tutor.planLabel")}
-            <select
-              value={planId}
-              onChange={(e) => setPlanId(e.target.value)}
-              className="flex-1 min-w-0 rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {plans.length === 0 && <option value="">{t("tutor.planLabel")}</option>}
-              {plans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.topic}
-                </option>
-              ))}
-            </select>
+            <div className="relative flex-1 min-w-0">
+              <select
+                value={planId}
+                onChange={(e) => setPlanId(e.target.value)}
+                className="w-full appearance-none rounded-xl border border-border bg-card pl-3 pr-9 py-2 text-sm text-foreground cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {plans.length === 0 && <option value="">{t("tutor.planLabel")}</option>}
+                {plans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.topic}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                aria-hidden="true"
+                className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-caption"
+              />
+            </div>
           </label>
 
           {planId ? (

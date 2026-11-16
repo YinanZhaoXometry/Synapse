@@ -43,6 +43,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import ChatMarkdown from "@/components/shared/chat-markdown";
 import { CopyButton } from "@/components/shared/copy-button";
+import { useSessionIdentity } from "@/components/shared/session-identity";
 import type { PlanMistakeEntryView } from "@/api";
 import type { Material, ReadingLocator, ReadingPosition } from "@/domain/entities";
 import { cn } from "@/lib/utils";
@@ -127,19 +128,39 @@ export function CompanionPanel(props: CompanionPanelProps) {
  * shapes satisfy it structurally). */
 type ChatEntry = BubbleEntry & { failed: boolean };
 
+/** The Companion's avatar chip (owner round 2026-11-16): the Sparkles glyph —
+ * the AI mark the tutor header and the starter chips already wear — replaces
+ * the hardcoded "S" letter. Language-neutral (the letter could never localize),
+ * impossible to confuse with the user's identity chip, and one brand mark
+ * across every chat surface. Square-rounded vs the user avatar's circle keeps
+ * the two row shapes distinct at a glance. */
+function CompanionAvatar({ className }: { className: string }) {
+  return (
+    <span aria-hidden="true" className={cn("bg-[var(--accent-tint)] text-accent-ink grid place-items-center shrink-0", className)}>
+      <Sparkles className="w-4 h-4" />
+    </span>
+  );
+}
+
 /** The user's row — a failed turn keeps its text visible with a one-click retry.
  * Plain text (whitespace-pre-wrap), never markdown: the user's words render
  * verbatim, the way agent apps show their input (epic-26 decision). Copy rides
  * the bubble's top-right corner (hover/focus-revealed). */
 function UserBubble({ entry, onRetry }: { entry: ChatEntry; onRetry(): void }) {
   const { t } = useLanguage();
+  // The avatar is the session identity (owner round 2026-11-16) — the SAME
+  // useSessionIdentity seam the sidebar footer's avatar renders through, so a
+  // chat row can never show a letter the chrome doesn't (the hardcoded "Y"
+  // scaffold residue died here). Look matches the system avatar too: the
+  // accent-tint circle, not a black square.
+  const identity = useSessionIdentity();
   return (
     <div className="flex flex-row-reverse gap-2.5 max-w-[88%] self-end">
       <span
         aria-hidden="true"
-        className="w-[30px] h-[30px] rounded-[9px] bg-foreground text-background grid place-items-center text-xs font-bold shrink-0"
+        className="w-[30px] h-[30px] rounded-full bg-[var(--accent-tint)] text-accent-ink grid place-items-center text-xs font-semibold shrink-0"
       >
-        Y
+        {identity.letter}
       </span>
       <div className="group relative flex flex-col items-end gap-1 min-w-0">
         <div className="chat-body leading-[1.7] rounded-[14px] rounded-tr-[4px] bg-foreground text-background px-[15px] py-3 whitespace-pre-wrap">
@@ -186,12 +207,7 @@ function CompanionBubble({
   const { lead, quiz } = splitQuizBlock(entry.text);
   return (
     <div className="flex gap-2.5 max-w-[88%] self-start">
-      <span
-        aria-hidden="true"
-        className="w-[30px] h-[30px] rounded-[9px] bg-[var(--accent-tint)] text-accent-ink grid place-items-center text-xs font-bold shrink-0"
-      >
-        S
-      </span>
+      <CompanionAvatar className="w-[30px] h-[30px] rounded-[9px]" />
       <div className="group relative chat-body leading-[1.7] rounded-[14px] rounded-tl-[4px] bg-card border border-border-soft shadow-soft px-[15px] py-3 min-w-0">
         <CopyButton
           text={lead}
@@ -267,12 +283,7 @@ function StreamingBubble({
   const shown = text !== null ? leadBeforeQuiz(text) : null;
   return (
     <div className="flex gap-2.5 max-w-[88%] self-start">
-      <span
-        aria-hidden="true"
-        className="w-[30px] h-[30px] rounded-[9px] bg-[var(--accent-tint)] text-accent-ink grid place-items-center text-xs font-bold shrink-0"
-      >
-        S
-      </span>
+      <CompanionAvatar className="w-[30px] h-[30px] rounded-[9px]" />
       <div className="chat-body leading-[1.7] rounded-[14px] rounded-tl-[4px] bg-card border border-border-soft shadow-soft px-[15px] py-3 min-w-0">
         {shown !== null && shown.length > 0 && <ChatMarkdown text={shown} />}
         {quizPending && (
@@ -373,7 +384,13 @@ function Composer({
         disabled={busy}
         placeholder={placeholder}
         aria-label={placeholder}
-        className="flex-1 min-w-0 min-h-6 max-h-[120px] resize-none border-none bg-transparent px-0 py-[5px] text-sm leading-[1.55] placeholder:text-caption-soft focus:outline-none focus-visible:outline-none disabled:opacity-60"
+        // First-line centering (owner round 2026-11-16): the shell bottom-aligns
+        // (items-end) this textarea against the 42px send button — min-h matching
+        // the button makes both boxes the same height, and pt-[10px] centers the
+        // ~21.7px line (text-sm × leading-[1.55]) inside that 42px box, so the
+        // single-line placeholder sits on the row's true center. Multi-line
+        // growth keeps the first line parked and adds lines below.
+        className="flex-1 min-w-0 min-h-[42px] max-h-[120px] resize-none border-none bg-transparent px-0 pt-[10px] pb-2 text-sm leading-[1.55] placeholder:text-caption-soft focus:outline-none focus-visible:outline-none disabled:opacity-60"
       />
       <button
         type="button"
@@ -471,12 +488,7 @@ function ReadingCompanionSurface({
     <div className="flex h-full min-h-0 flex-col">
       {/* header — min-h so 200% text zoom reflows instead of clipping (a11y floor) */}
       <div className="flex-none flex items-center gap-2.5 min-h-[52px] px-4 border-b border-border-soft">
-        <span
-          aria-hidden="true"
-          className="w-8 h-8 rounded-[9px] bg-[var(--accent-tint)] text-accent-ink grid place-items-center text-xs font-bold shrink-0 font-display"
-        >
-          S
-        </span>
+        <CompanionAvatar className="w-8 h-8 rounded-[9px]" />
         <div className="text-sm font-semibold leading-tight min-w-0 truncate">{t("companion.title")}</div>
         {badgeTarget && (
           <span className="ml-auto flex-none inline-flex items-center rounded-full bg-[var(--accent-tint)] text-accent-ink px-2 py-0.5 text-[11px] font-semibold">
@@ -652,12 +664,7 @@ function PlanCompanionSurface({ planId, materials, mistakeEntries, teachPrefill 
     <div className="flex h-full min-h-0 flex-col">
       {/* header — min-h so 200% text zoom reflows instead of clipping (a11y floor) */}
       <div className="flex-none flex items-center gap-2.5 min-h-[52px] px-4 border-b border-border-soft">
-        <span
-          aria-hidden="true"
-          className="w-8 h-8 rounded-[9px] bg-[var(--accent-tint)] text-accent-ink grid place-items-center text-xs font-bold shrink-0 font-display"
-        >
-          S
-        </span>
+        <CompanionAvatar className="w-8 h-8 rounded-[9px]" />
         <div className="text-sm font-semibold leading-tight min-w-0 truncate">{t("companion.title")}</div>
         <span className="ml-auto flex-none inline-flex items-center rounded-full bg-[var(--accent-tint)] text-accent-ink px-2 py-0.5 text-[11px] font-semibold">
           {streamTarget
