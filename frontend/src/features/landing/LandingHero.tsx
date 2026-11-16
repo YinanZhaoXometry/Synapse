@@ -1,7 +1,7 @@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ArrowDownIcon, BulbIcon, DownloadIcon } from "./landing-icons";
 import { LANDING_RELEASES_URL } from "./LandingHeader";
-import { LandingHeroCanvas } from "./LandingHeroCanvas";
+import { LandingHeroFX } from "./LandingHeroFX";
 
 /**
  * Hero — copy left, the knowledge-map board right (ported verbatim from the
@@ -11,9 +11,9 @@ export function LandingHero() {
   const { t, language } = useLanguage();
   return (
     <section className="lp-hero" id="lp-top" aria-labelledby="lp-hero-title">
-      <LandingHeroCanvas />
       <div className="lp-container lp-hero-grid">
         <div className="lp-hero-copy">
+          <LandingHeroFX />
           <p className="lp-eyebrow">{t("landing.hero.eyebrow")}</p>
           <h1 className="lp-hero-title" id="lp-hero-title">
             {t("landing.hero.titleLine1")}
