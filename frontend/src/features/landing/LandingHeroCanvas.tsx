@@ -79,11 +79,12 @@ export function LandingHeroCanvas() {
         const cx = -span / 2 + beamGap * (i + 0.5) + wobble * beamGap * 0.42;
         const halfW = beamGap * (0.34 + 0.2 * Math.sin(t * 0.55 + i * 2.4) ** 2);
         const grad = fx.createLinearGradient(cx - halfW, 0, cx + halfW, 0);
-        // raycast-faint: the field is felt, not seen — alpha stays in the
-        // 0.04–0.12 band so the page keeps its near-black ground
-        const a = 0.09 + 0.05 * Math.sin(t * 0.5 + i * 1.9);
+        // round 9: owner call — slower drift (the loop clock runs at 0.4×),
+        // and the coral reads vivid again: alphas back up out of the
+        // raycast-faint band, the dark sink below keeps the ground black
+        const a = 0.42 + 0.14 * Math.sin(t * 0.5 + i * 1.9);
         grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
-        grad.addColorStop(0.5, `rgba(${r},${g},${b},${Math.max(0.03, a)})`);
+        grad.addColorStop(0.5, `rgba(${r},${g},${b},${Math.max(0.1, a)})`);
         grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
         fx.fillStyle = grad;
         fx.fillRect(-span / 2, -span / 2, span, span);
@@ -95,16 +96,16 @@ export function LandingHeroCanvas() {
       fx.fillRect(-span / 2, -span / 2, span, span);
       fx.globalAlpha = 1;
 
-      // upscale onto the visible canvas, then sink it back toward black — the
-      // reference reads ~90% darkness with a slow warm shimmer on top
+      // upscale onto the visible canvas; a light dark sink keeps the ground
+      // black now that the beams run vivid
       const w = canvas.width;
       const h = canvas.height;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, w, h);
-      ctx.globalAlpha = 0.5;
+      ctx.globalAlpha = 0.66;
       ctx.drawImage(field, 0, 0, w, h);
       ctx.globalAlpha = 1;
-      ctx.fillStyle = "rgba(7, 8, 10, 0.4)";
+      ctx.fillStyle = "rgba(7, 8, 10, 0.18)";
       ctx.fillRect(0, 0, w, h);
     };
 
@@ -117,7 +118,9 @@ export function LandingHeroCanvas() {
     };
 
     const loop = (now: number) => {
-      const t = last + Math.min((now - last) / 1000, 0.1);
+      // owner round 9: half-speed clock — the beams drift at a contemplative
+      // pace instead of the reference's brisk shimmer
+      const t = last + Math.min((now - last) / 1000, 0.1) * 0.4;
       last = t;
       draw(t);
       raf = requestAnimationFrame(loop);
