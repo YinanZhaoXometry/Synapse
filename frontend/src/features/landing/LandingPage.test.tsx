@@ -271,17 +271,17 @@ describe("LandingPage — round 7 polish", () => {
   });
 });
 
-describe("LandingPage — round 8 (raycast glass + hero canvas)", () => {
-  it("mounts the hero beam-field canvas behind the copy", async () => {
+describe("LandingPage — round 8+10 (glass navbar + hero fx)", () => {
+  it("mounts the hero fx inside the copy block, masked and aria-hidden", async () => {
     renderLanding();
     await screen.findByText(zh["landing.hero.lead"]);
-    const canvas = document.querySelector(".lp-hero-canvas");
-    expect(canvas).toBeTruthy();
-    expect(canvas).toHaveAttribute("aria-hidden", "true");
-    // the canvas is the hero's first child — the copy renders after it (and
-    // rides above via the stylesheet, which jsdom does not load)
-    const hero = document.querySelector(".lp-hero")!;
-    expect(hero.firstElementChild).toBe(canvas);
-    expect(hero.contains(document.querySelector(".lp-hero-copy")!)).toBe(true);
+    const fx = document.querySelector(".lp-hero-fx");
+    expect(fx).toBeTruthy();
+    expect(fx).toHaveAttribute("aria-hidden", "true");
+    // the fx is the copy block's first child — the content renders after it
+    // (and rides above via the stylesheet, which jsdom does not load)
+    const copy = document.querySelector(".lp-hero-copy")!;
+    expect(copy.firstElementChild).toBe(fx);
+    expect(copy.textContent).toContain(zh["landing.hero.titleLine1"]);
   });
 });
