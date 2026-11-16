@@ -619,7 +619,13 @@ html.lp-active {
  * (round 10); variants switch via ?fx= on the URL for the owner review */
 .lp-hero-fx {
   position: absolute;
-  inset: 0;
+  /* full-bleed breakout (owner round 10): the copy block caps at 860px, but
+   * the effect spans the whole viewport width — vertically it stays in the
+   * copy's band with its soft top/bottom fade (.lp-hero clips the overflow) */
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 50vw);
+  right: calc(50% - 50vw);
   /* z-index -1: a positioned element otherwise paints ABOVE the in-flow
    * text (CSS paint order), washing the headline and buttons in glow —
    * push it behind the copy's content instead (round 10, owner report) */
