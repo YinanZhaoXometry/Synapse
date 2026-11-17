@@ -1310,7 +1310,9 @@ export const translations = {
       'landing.footer.note': '让学习真正发生',
       'landing.footer.navAria': '页脚导航',
       'landing.footer.top': '回到顶部',
-      'landing.footer.copyright': '© 2026 Synapse'
+      'landing.footer.copyright': '© 2026 Synapse',
+      'apollo.slowRequest.title': '服务正在唤醒',
+      'apollo.slowRequest.description': '部署在 Render 上的服务需要冷启动，请耐心等待片刻，后续请求将恢复正常速度。'
     },
     en: {
       'brand.sub': 'Study companion',
@@ -2621,7 +2623,9 @@ export const translations = {
       'landing.footer.note': 'Where real learning happens',
       'landing.footer.navAria': 'Footer navigation',
       'landing.footer.top': 'Back to top',
-      'landing.footer.copyright': '© 2026 Synapse'
+      'landing.footer.copyright': '© 2026 Synapse',
+      'apollo.slowRequest.title': 'Waking the server up',
+      'apollo.slowRequest.description': 'The Render deployment needs a cold start — please hang tight, later requests will be back to full speed.'
     },
 
     zhTW: {
@@ -3858,7 +3862,9 @@ export const translations = {
       'landing.footer.note': '讓學習真正發生',
       'landing.footer.navAria': '頁腳導航',
       'landing.footer.top': '回到頂部',
-      'landing.footer.copyright': '© 2026 Synapse'
+      'landing.footer.copyright': '© 2026 Synapse',
+      'apollo.slowRequest.title': '服務正在喚醒',
+      'apollo.slowRequest.description': '部署在 Render 上的服務需要冷啟動，請耐心等待片刻，後續請求將恢復正常速度。'
     }
 
 } as const;
