@@ -52,6 +52,22 @@ export function currentUiLanguage(): Language {
   return uiLanguageMirror;
 }
 
+/**
+ * Non-React translate (the mirror's language): the same dict/fallback walk as
+ * the provider's `t`, for link-layer copy that can't mount the hook (the
+ * slow-request toast link).
+ */
+export function translateStatic(key: string, vars?: Record<string, string | number>): string {
+  const dict = DICT_FOR[uiLanguageMirror] ?? DICT_FOR.zh;
+  let text = dict[key] ?? DICT_FOR.zh[key] ?? key;
+  if (vars) {
+    Object.entries(vars).forEach(([k, v]) => {
+      text = text.replace(`{${k}}`, String(v));
+    });
+  }
+  return text;
+}
+
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [language, setLang] = useState<Language>(() => {
     const saved = localStorage.getItem("synapse-lang");

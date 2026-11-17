@@ -12,6 +12,7 @@ import { CombinedGraphQLErrors } from "@apollo/client/errors";
 import { ErrorLink } from "@apollo/client/link/error";
 import { SetContextLink } from "@apollo/client/link/context";
 import { providerOverrideLink } from "./provider-override-link";
+import { slowRequestToastLink } from "./slow-request-toast";
 import { getToken } from "./auth-token";
 import { teardownSession } from "./session";
 
@@ -60,10 +61,15 @@ export function createApolloClient(): ApolloClient {
   // link, zero consumer knowledge.
   const byokLink = providerOverrideLink();
 
+  // The slow-request hint: the api deploys on Render, so a first hit after an
+  // idle stretch pays the cold start — any operation still pending past 3s
+  // toasts a friendly heads-up (once, suppression-windowed).
+  const slowToastLink = slowRequestToastLink();
+
   const httpLink = new HttpLink({ uri: apiUri() });
 
   return new ApolloClient({
-    link: from([errorLink, authLink, byokLink, httpLink]),
+    link: from([errorLink, authLink, byokLink, slowToastLink, httpLink]),
     cache: new InMemoryCache(),
     // Queries the user did not ask for must never mask a failure (the phase-1
     // "never silent" posture): errors surface through `error` immediately.
