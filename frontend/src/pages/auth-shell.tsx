@@ -7,7 +7,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { CircleAlert } from "lucide-react";
+import { ArrowLeft, CircleAlert } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { sanitizeReturnPath } from "@/apollo/session";
 import { apiErrorCode, isNetworkError, type ApiErrorCode } from "@/api/errors";
@@ -155,6 +155,16 @@ export function AuthShell({
             {t(switchTo.hintKey)}{" "}
             <Link to={switchTo.to} className="font-semibold text-accent-ink hover:underline">
               {t(switchTo.labelKey)}
+            </Link>
+          </p>
+
+          {/* The exit back to the 官网 (the marketing landing at `/`, which the
+              EntryGate renders while logged out) — the landing header's 登录
+              link, pointed the other way. */}
+          <p className="text-xs text-muted-foreground text-center mt-2">
+            <Link to="/" className="inline-flex items-center gap-1 transition-colors hover:text-foreground">
+              <ArrowLeft className="w-3 h-3" aria-hidden="true" />
+              {t("auth.backToSite")}
             </Link>
           </p>
         </div>
