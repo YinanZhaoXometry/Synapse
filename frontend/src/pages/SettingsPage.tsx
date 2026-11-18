@@ -242,6 +242,7 @@ function PasswordChangeRow() {
           type="password"
           autoComplete="current-password"
           value={current}
+          placeholder={t("settings.passwordCurrentPlaceholder")}
           aria-label={t("settings.passwordCurrentAria")}
           onChange={(event) => setCurrent(event.target.value)}
           className={ACCOUNT_INPUT}
@@ -250,6 +251,7 @@ function PasswordChangeRow() {
           type="password"
           autoComplete="new-password"
           value={next}
+          placeholder={t("settings.passwordNewPlaceholder")}
           aria-label={t("settings.passwordNewAria")}
           onChange={(event) => setNext(event.target.value)}
           className={ACCOUNT_INPUT}
@@ -258,6 +260,7 @@ function PasswordChangeRow() {
           type="password"
           autoComplete="new-password"
           value={confirm}
+          placeholder={t("settings.passwordConfirmPlaceholder")}
           aria-label={t("settings.passwordConfirmAria")}
           onChange={(event) => setConfirm(event.target.value)}
           className={ACCOUNT_INPUT}
