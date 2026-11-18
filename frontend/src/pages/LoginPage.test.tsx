@@ -67,6 +67,8 @@ describe("LoginPage (epic P2-8 T2, AD-15)", () => {
     expect(screen.getByText("欢迎回来")).toBeInTheDocument();
     expect(screen.getByText("登录 Synapse").closest("p")).toBeTruthy();
     expect(screen.getByRole("link", { name: "注册" })).toHaveAttribute("href", "/register");
+    // the exit back to the 官网 — the landing header's 登录 link, reversed
+    expect(screen.getByRole("link", { name: "返回官网" })).toHaveAttribute("href", "/");
   });
 
   it("an authed visitor never sees the wall — straight to plans", () => {
